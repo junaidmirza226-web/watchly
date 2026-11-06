@@ -34,7 +34,9 @@ class DownloadRulesTest {
 
     @Test
     fun `failure reasons are plain language`() {
+        // §7.3: out-of-space mid-download is presented as a pause.
         assertTrue(DownloadRules.failureReason(1004).contains("space", ignoreCase = true))
+        assertTrue(DownloadRules.failureReason(1004).contains("Paused"))
         assertTrue(DownloadRules.failureReason(1001).contains("save", ignoreCase = true))
         assertTrue(DownloadRules.failureReason(404).contains("404"))
         assertTrue(DownloadRules.failureReason(1000).isNotBlank())

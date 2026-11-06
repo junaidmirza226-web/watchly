@@ -59,7 +59,13 @@ object DownloadRules {
      * DownloadManager COLUMN_REASON value for a failed download.
      */
     fun failureReason(reasonCode: Int): String = when (reasonCode) {
-        1004 -> "Not enough space on the phone."
+        // Spec §7.3: running out of space mid-download PAUSES the
+        // download with a clear message — nothing is corrupted, and
+        // Retry (a fresh start of the same file) resumes the job
+        // once space is freed. DownloadManager itself reports this
+        // as a failure; the wording is the pause the user sees.
+        1004 -> "Paused — the phone ran out of space. Free up some " +
+            "space, then tap Retry Download."
         1001, 1005 -> "Couldn't save the file to storage."
         1002, 1003 -> "The source sent bad data. Try again."
         1006 -> "The download couldn't be resumed."

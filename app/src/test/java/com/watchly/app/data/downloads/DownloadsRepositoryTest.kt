@@ -56,8 +56,16 @@ class DownloadsRepositoryTest {
             File(dir, fileName).absolutePath
     }
 
+    /** Scripts the §7.3 platform facts (network / battery / space). */
+    private class FakeEnvironment(
+        var env: DownloadEnvironment
+    ) : DownloadEnvironmentProvider {
+        override fun current(): DownloadEnvironment = env
+    }
+
     private lateinit var engine: FakeDownloadEngine
     private lateinit var repo: DownloadsRepository
+    private lateinit var context: android.app.Application
 
     private val film = Title(
         archiveId = "nightofthelivingdead_201910",
@@ -74,12 +82,30 @@ class DownloadsRepositoryTest {
 
     @Before
     fun setUp() {
-        val context = ApplicationProvider.getApplicationContext<Application>()
+        context = ApplicationProvider.getApplicationContext()
         context.getSharedPreferences(DownloadsRepository.PREFS_NAME, Context.MODE_PRIVATE)
             .edit().clear().commit()
+        context.getSharedPreferences(
+            DownloadSettingsRepository.PREFS_NAME, Context.MODE_PRIVATE
+        ).edit().clear().commit()
         engine = FakeDownloadEngine()
         repo = DownloadsRepository(context, engine)
     }
+
+    private fun checkedRepo(env: DownloadEnvironment): DownloadsRepository =
+        DownloadsRepository(
+            context,
+            engine,
+            DownloadSettingsRepository(context),
+            FakeEnvironment(env)
+        )
+
+    private fun goodEnv() = DownloadEnvironment(
+        network = NetworkKind.WIFI,
+        batteryPercent = 80,
+        batteryCharging = false,
+        freeBytes = 50_000_000_000L
+    )
 
     @Test
     fun `start download enqueues once and records it as queued`() {
@@ -147,6 +173,50 @@ class DownloadsRepositoryTest {
         val after = repo.recordForTitle(film.stableKey)!!
         assertEquals(DownloadStatus.FAILED, after.status)
         assertTrue(after.failureReason!!.contains("removed", ignoreCase = true))
+    }
+
+    @Test
+    fun `start download records the picked quality label`() {
+        val record = repo.startDownload(film, file)
+
+        assertEquals("MPEG4", record.qualityLabel)
+        // …and it survives the SharedPreferences round-trip.
+        assertEquals("MPEG4", repo.recordForTitle(film.stableKey)!!.qualityLabel)
+    }
+
+    @Test
+    fun `checked start is refused on mobile data while wifi only is on`() {
+        val outcome = checkedRepo(
+            goodEnv().copy(network = NetworkKind.METERED)
+        ).startDownloadChecked(film, file)
+
+        assertTrue(outcome is StartDownloadOutcome.Refused)
+        assertTrue(
+            (outcome as StartDownloadOutcome.Refused).message.contains("Wi-Fi only")
+        )
+        assertEquals(0, engine.enqueueCount)
+    }
+
+    @Test
+    fun `checked start proceeds on wifi and warns near the storage cap`() {
+        // Cap just above the file size: starting crosses 90% of it.
+        DownloadSettingsRepository(context).setStorageCapBytes(2_100)
+
+        val outcome = checkedRepo(goodEnv()).startDownloadChecked(film, file)
+
+        assertTrue(outcome is StartDownloadOutcome.Started)
+        assertNotNull((outcome as StartDownloadOutcome.Started).warning)
+        assertEquals(1, engine.enqueueCount)
+    }
+
+    @Test
+    fun `checked start is refused when the battery is low`() {
+        val outcome = checkedRepo(
+            goodEnv().copy(batteryPercent = 10, batteryCharging = false)
+        ).startDownloadChecked(film, file)
+
+        assertTrue(outcome is StartDownloadOutcome.Refused)
+        assertEquals(0, engine.enqueueCount)
     }
 
     @Test

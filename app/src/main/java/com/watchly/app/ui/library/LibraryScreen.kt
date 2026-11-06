@@ -433,8 +433,12 @@ private fun downloadStatusText(record: DownloadRecord): String = when (record.st
         "Downloading$pct$sizes"
     }
     DownloadStatus.PAUSED -> "Paused — will resume automatically"
-    DownloadStatus.COMPLETED ->
-        "Downloaded • ${formatBytes(record.sizeBytes ?: record.totalBytes)}"
+    DownloadStatus.COMPLETED -> {
+        // Include the quality the user picked (spec §7.2 list shows
+        // quality) when the record carries one.
+        val quality = record.qualityLabel?.let { "$it • " } ?: ""
+        "Downloaded • $quality${formatBytes(record.sizeBytes ?: record.totalBytes)}"
+    }
     DownloadStatus.FAILED ->
         "Failed — ${record.failureReason ?: "something went wrong"}"
 }

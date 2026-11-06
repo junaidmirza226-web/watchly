@@ -17,8 +17,14 @@ package com.watchly.app.data.downloads
 
 import android.app.DownloadManager
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
+import android.os.BatteryManager
 import android.os.Environment
+import android.os.StatFs
 import com.watchly.app.data.model.MediaType
 import com.watchly.app.data.model.PlayableFile
 import com.watchly.app.data.model.Title
@@ -38,6 +44,8 @@ data class DownloadRecord(
     val url: String,
     /** Expected size from the source, when known. */
     val sizeBytes: Long?,
+    /** The quality the user picked for this download (spec §7.1). */
+    val qualityLabel: String? = null,
     /** System DownloadManager id (-1 only for hand-built records). */
     val downloadId: Long,
     val status: DownloadStatus,
@@ -104,6 +112,14 @@ class AndroidDownloadEngine(context: Context) : DownloadEngine {
             .setDestinationInExternalFilesDir(
                 appContext, Environment.DIRECTORY_MOVIES, fileName
             )
+        // §7.3 at the engine level too: while Wi-Fi only is on, the
+        // system itself must not spend mobile data on a download
+        // (the repository's checked start already refuses to begin
+        // one on mobile data — this covers the connection changing
+        // mid-download).
+        if (DownloadSettingsRepository(appContext).settings().wifiOnly) {
+            request.setAllowedOverMetered(false)
+        }
         return manager.enqueue(request)
     }
 
@@ -138,9 +154,99 @@ class AndroidDownloadEngine(context: Context) : DownloadEngine {
             .absolutePath
 }
 
+/**
+ * The phone facts the §7.3 start rules read (network kind, battery,
+ * free space), behind an interface so repository tests can script
+ * them. The policy that judges them is [DownloadPolicy].
+ */
+interface DownloadEnvironmentProvider {
+    fun current(): DownloadEnvironment
+}
+
+/**
+ * Real provider: ConnectivityManager + the sticky battery intent +
+ * StatFs on the downloads volume. Deliberately conservative — a
+ * start is only ever blocked on a POSITIVELY known bad state
+ * (cellular transport while Wi-Fi only is on, a read low battery,
+ * a measured free-space shortfall). Anything the platform can't
+ * describe is treated as fine and left for DownloadManager, which
+ * queues and retries on its own.
+ */
+class AndroidDownloadEnvironmentProvider(context: Context) :
+    DownloadEnvironmentProvider {
+
+    private val appContext = context.applicationContext
+
+    override fun current(): DownloadEnvironment {
+        val connectivity = appContext.getSystemService(
+            Context.CONNECTIVITY_SERVICE
+        ) as? ConnectivityManager
+        val capabilities = runCatching {
+            connectivity?.activeNetwork?.let {
+                connectivity.getNetworkCapabilities(it)
+            }
+        }.getOrNull()
+        // Only a POSITIVELY known cellular transport counts as
+        // metered. Wi-Fi/Ethernet, VPN-only, empty or unreadable
+        // capability sets are all treated as unmetered — the §7.3
+        // block must never fire on a guess.
+        val network = when {
+            capabilities == null -> NetworkKind.WIFI
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ->
+                NetworkKind.METERED
+            else -> NetworkKind.WIFI
+        }
+
+        val batteryIntent = runCatching {
+            appContext.registerReceiver(
+                null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            )
+        }.getOrNull()
+        val level = batteryIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = batteryIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+        val batteryPercent = if (level >= 0 && scale > 0) {
+            level * 100 / scale
+        } else {
+            null
+        }
+        val status = batteryIntent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+        val charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+            status == BatteryManager.BATTERY_STATUS_FULL
+
+        val freeBytes = runCatching {
+            val dir = appContext.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
+                ?: appContext.filesDir
+            StatFs(dir.absolutePath).availableBytes
+        }.getOrNull()
+
+        return DownloadEnvironment(
+            network = network,
+            batteryPercent = batteryPercent,
+            batteryCharging = charging,
+            freeBytes = freeBytes
+        )
+    }
+}
+
+/** Result of [DownloadsRepository.startDownloadChecked]. */
+sealed interface StartDownloadOutcome {
+    /** The download is enqueued; [warning] rides along when §7.3 asks for one. */
+    data class Started(
+        val record: DownloadRecord,
+        val warning: String?
+    ) : StartDownloadOutcome
+
+    /** Nothing was enqueued; [message] says why, in plain language. */
+    data class Refused(val message: String) : StartDownloadOutcome
+}
+
 class DownloadsRepository(
     context: Context,
-    private val engine: DownloadEngine = AndroidDownloadEngine(context)
+    private val engine: DownloadEngine = AndroidDownloadEngine(context),
+    private val downloadSettings: DownloadSettingsRepository =
+        DownloadSettingsRepository(context),
+    private val environment: DownloadEnvironmentProvider =
+        AndroidDownloadEnvironmentProvider(context)
 ) {
 
     private val prefs =
@@ -172,12 +278,40 @@ class DownloadsRepository(
             fileName = file.fileName,
             url = file.url,
             sizeBytes = file.sizeBytes,
+            qualityLabel = DownloadPolicy.qualityLabel(file),
             downloadId = downloadId,
             status = DownloadStatus.QUEUED,
             createdAtMs = System.currentTimeMillis()
         )
         writeRecords(readRecords().filter { it.id != id } + record)
         return record
+    }
+
+    /**
+     * Starts a download only if the §7.3 rules allow it right now
+     * (Wi-Fi only, low battery, free space, storage cap — see
+     * [DownloadPolicy.evaluateStart]). The UI's download path goes
+     * through here; [startDownload] stays the unconditional
+     * primitive underneath (and what retries use).
+     */
+    fun startDownloadChecked(title: Title, file: PlayableFile): StartDownloadOutcome {
+        val decision = DownloadPolicy.evaluateStart(
+            settings = downloadSettings.settings(),
+            environment = environment.current(),
+            storedBytes = totalDownloadedBytes(),
+            newFileBytes = file.sizeBytes
+        )
+        return when (decision) {
+            is StartDecision.Blocked ->
+                StartDownloadOutcome.Refused(decision.message)
+            is StartDecision.AllowedWithWarning ->
+                StartDownloadOutcome.Started(
+                    startDownload(title, file),
+                    decision.warning
+                )
+            StartDecision.Allowed ->
+                StartDownloadOutcome.Started(startDownload(title, file), null)
+        }
     }
 
     /** All downloads, newest first, with fresh engine statuses. */
@@ -304,6 +438,9 @@ class DownloadsRepository(
                     } else {
                         null
                     },
+                    qualityLabel = obj.optString("quality").takeIf {
+                        it.isNotBlank() && it != "null"
+                    },
                     downloadId = obj.optLong("downloadId", -1),
                     status = runCatching {
                         DownloadStatus.valueOf(obj.optString("status"))
@@ -336,6 +473,7 @@ class DownloadsRepository(
                     .put("fileName", record.fileName)
                     .put("url", record.url)
                     .put("size", record.sizeBytes ?: JSONObject.NULL)
+                    .put("quality", record.qualityLabel ?: JSONObject.NULL)
                     .put("downloadId", record.downloadId)
                     .put("status", record.status.name)
                     .put("bytes", record.bytesDownloaded)

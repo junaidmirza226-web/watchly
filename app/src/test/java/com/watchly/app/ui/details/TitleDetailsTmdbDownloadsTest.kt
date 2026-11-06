@@ -83,10 +83,33 @@ class TitleDetailsTmdbDownloadsTest {
             context.getSharedPreferences(name, Context.MODE_PRIVATE)
                 .edit().clear().commit()
         }
+        // The §7.3-checked download start reads live phone state
+        // through the DownloadEnvironmentProvider seam; Robolectric's
+        // shadow phone reports cellular + a full disk, which the
+        // rules would (correctly) refuse. Script a normal phone
+        // through the seam instead (the policy itself is unit-tested
+        // separately; DownloadsRepositoryTest covers refusals).
+        context.getSharedPreferences(
+            com.watchly.app.data.downloads.DownloadSettingsRepository.PREFS_NAME,
+            Context.MODE_PRIVATE
+        ).edit().clear().commit()
         library = WatchlistRepository(context)
         keyRepo = TmdbKeyRepository(context)
         engine = FakeEngine()
-        downloads = DownloadsRepository(context, engine)
+        downloads = DownloadsRepository(
+            context,
+            engine,
+            com.watchly.app.data.downloads.DownloadSettingsRepository(context),
+            object : com.watchly.app.data.downloads.DownloadEnvironmentProvider {
+                override fun current() =
+                    com.watchly.app.data.downloads.DownloadEnvironment(
+                        network = com.watchly.app.data.downloads.NetworkKind.WIFI,
+                        batteryPercent = 80,
+                        batteryCharging = false,
+                        freeBytes = 50_000_000_000L
+                    )
+            }
+        )
         mockkObject(TvMazeApi)
         mockkObject(ArchiveApi)
         mockkObject(TmdbApi)
@@ -194,6 +217,86 @@ class TitleDetailsTmdbDownloadsTest {
             assertTrue(state.infoMessage!!.contains("Download started"))
             assertEquals("Downloading…", state.downloadButtonLabel)
         }
+
+    @Test
+    fun `download with two qualities opens the picker and starts the picked file`() =
+        runTest(dispatcher) {
+            val film = Title(
+                archiveId = "nightofthelivingdead_201910",
+                name = "Night of the Living Dead",
+                mediaType = MediaType.MOVIE,
+                year = "1968"
+            )
+            val hd = PlayableFile(
+                url = "https://archive.org/download/x/hd.mp4",
+                fileName = "hd.mp4",
+                format = "h.264",
+                sizeBytes = 900L,
+                qualityLabel = "h.264 HD"
+            )
+            val sd = PlayableFile(
+                url = "https://archive.org/download/x/sd.mp4",
+                fileName = "sd.mp4",
+                format = "MPEG4",
+                sizeBytes = 300L,
+                qualityLabel = "512Kb MPEG4"
+            )
+            coEvery { ArchiveApi.fetchPlayableFiles(any()) } returns listOf(sd, hd)
+
+            val viewModel = TitleDetailsViewModel(film, library, keyRepo, downloads)
+            advanceUntilIdle(); idle()
+
+            // Tapping Download must NOT start anything yet — the
+            // user picks a quality first (spec §7.1), best first.
+            viewModel.onDownloadRequested()
+            assertEquals(0, engine.enqueueCount)
+            assertEquals(
+                listOf("hd.mp4", "sd.mp4"),
+                viewModel.uiState.value.qualityChoices!!.map { it.fileName }
+            )
+
+            // Picking the smaller file starts exactly that download.
+            viewModel.onQualityChosen(sd)
+            assertEquals(1, engine.enqueueCount)
+            assertEquals(null, viewModel.uiState.value.qualityChoices)
+            val record = downloads.recordForTitle(film.stableKey)!!
+            assertEquals("sd.mp4", record.fileName)
+            assertEquals("512Kb MPEG4", record.qualityLabel)
+            assertTrue(
+                viewModel.uiState.value.infoMessage!!.contains("Download started")
+            )
+        }
+
+    @Test
+    fun `dismissing the quality picker starts nothing`() = runTest(dispatcher) {
+        val film = Title(
+            archiveId = "nightofthelivingdead_201910",
+            name = "Night of the Living Dead",
+            mediaType = MediaType.MOVIE,
+            year = "1968"
+        )
+        coEvery { ArchiveApi.fetchPlayableFiles(any()) } returns listOf(
+            PlayableFile(
+                url = "https://archive.org/download/x/a.mp4",
+                fileName = "a.mp4", format = "h.264", sizeBytes = 10L
+            ),
+            PlayableFile(
+                url = "https://archive.org/download/x/b.mp4",
+                fileName = "b.mp4", format = "MPEG4", sizeBytes = 5L
+            )
+        )
+
+        val viewModel = TitleDetailsViewModel(film, library, keyRepo, downloads)
+        advanceUntilIdle(); idle()
+
+        viewModel.onDownloadRequested()
+        assertTrue(viewModel.uiState.value.qualityChoices != null)
+
+        viewModel.onQualityPickerDismissed()
+        assertEquals(null, viewModel.uiState.value.qualityChoices)
+        assertEquals(0, engine.enqueueCount)
+        assertTrue(downloads.getDownloads().isEmpty())
+    }
 
     @Test
     fun `download on a catalogue only title explains why honestly`() =
