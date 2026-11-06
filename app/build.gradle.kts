@@ -47,6 +47,14 @@ android {
                 it.testLogging {
                     events("passed", "failed", "skipped")
                 }
+                // Roborazzi goldens: VERIFY against the committed
+                // screenshots by default (this is what CI runs);
+                // record/refresh them with -ProborazziRecord.
+                if (project.hasProperty("roborazziRecord")) {
+                    it.systemProperty("roborazzi.test.record", "true")
+                } else {
+                    it.systemProperty("roborazzi.test.verify", "true")
+                }
             }
         }
     }
@@ -81,4 +89,9 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core.ktx)
     testImplementation(libs.androidx.test.ext.junit.ktx)
+    // Roborazzi screenshot goldens on Robolectric (testing-rd-plan
+    // Upgrade 3): full-screen captures inside ordinary Robolectric
+    // tests, so they also run under the local in-process harness.
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
 }

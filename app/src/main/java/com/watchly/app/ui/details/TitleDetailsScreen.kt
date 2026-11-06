@@ -31,8 +31,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -44,6 +46,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,6 +57,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -68,6 +72,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.watchly.app.data.downloads.DownloadPolicy
 import com.watchly.app.data.model.CastMember
 import com.watchly.app.data.model.Episode
 import com.watchly.app.data.model.MediaType
@@ -85,6 +90,13 @@ fun TitleDetailsScreen(
     title: Title,
     modifier: Modifier = Modifier,
     onBack: () -> Unit = {},
+    /**
+     * Scroll state of the details list. Hoisted (with the usual
+     * default) so tests can jump to a scrolled position
+     * deterministically — the fixed-back-button screenshot golden
+     * depends on it. Production callers use the default.
+     */
+    listState: LazyListState = rememberLazyListState(),
     /**
      * Play a title's files in the Media3 player. Called only when the
      * title has a playable source; otherwise the ViewModel explains
@@ -107,6 +119,7 @@ fun TitleDetailsScreen(
     // a fixed overlay sibling of it, so it can never scroll away.
     Box(modifier = modifier.fillMaxSize()) {
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 32.dp)
     ) {
@@ -310,6 +323,64 @@ fun TitleDetailsScreen(
                 tint = WatchlyGold
             )
         }
+    }
+
+    // Download quality picker (spec §7.1, screens §14): open while
+    // the ViewModel holds choices — the title offered more than one
+    // file and the user tapped Download. Tapping a row starts that
+    // exact quality through the §7.3-checked path.
+    state.qualityChoices?.let { choices ->
+        AlertDialog(
+            onDismissRequest = viewModel::onQualityPickerDismissed,
+            title = {
+                Text(
+                    text = "Choose quality",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = WatchlyGold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    choices.forEach { file ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .clickable { viewModel.onQualityChosen(file) }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = DownloadPolicy.qualityLabel(file),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                file.sizeLabel?.let { size ->
+                                    Text(
+                                        text = size,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Download",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = WatchlyGold
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = viewModel::onQualityPickerDismissed) {
+                    Text("Cancel", color = WatchlyGold)
+                }
+            }
+        )
     }
 }
 

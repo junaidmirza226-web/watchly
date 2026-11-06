@@ -7,11 +7,21 @@
 # It will NOT run from testing/github-actions/.
 #
 # What runs:
-#   Job 1  unit-and-lint : JVM unit tests + Robolectric + Paparazzi verify
-#                          + Android Lint. No emulator. Fast gate for every PR.
+#   Job 1  unit-and-lint : JVM unit tests + Robolectric + Roborazzi
+#                          screenshot-golden verification (rides the
+#                          unit-test task — see app/build.gradle.kts)
+#                          + Android Lint. No emulator. Fast gate for
+#                          every PR.
 #   Job 2  emulator      : instrumented tests (app/src/androidTest) on an
 #                          API 34 emulator, KVM-accelerated, on ubuntu-latest.
 #                          Runs after Job 1 passes.
+#
+# Paparazzi note (2026-11-06): the old `verifyPaparazziDebug` step was
+# removed — no Paparazzi goldens were ever recorded, so the step could
+# only fail, and the screenshot layer moved to Roborazzi (which runs
+# inside the Robolectric harness; see testing-rd-plan.md Upgrade 3).
+# The Paparazzi plugin stays applied in app/build.gradle.kts as
+# scaffolding; CI simply never invokes its tasks.
 #
 # Assumes: Gradle wrapper committed, module :app, JDK 17, no secrets needed
 # for the debug build. See ../README.md for the full assumption list.
@@ -61,11 +71,12 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Unit tests (incl. Robolectric)
+      # Roborazzi screenshot verification rides THIS step: the
+      # screenshot tests are ordinary Robolectric unit tests, and
+      # app/build.gradle.kts sets roborazzi.test.verify=true for the
+      # test task, so a golden mismatch fails the build right here.
+      - name: Unit tests (incl. Robolectric + Roborazzi screenshots)
         run: ./gradlew :app:testDebugUnitTest --stacktrace
-
-      - name: Paparazzi screenshot verification
-        run: ./gradlew :app:verifyPaparazziDebug --stacktrace
 
       - name: Android Lint
         run: ./gradlew :app:lintDebug --stacktrace
@@ -77,8 +88,8 @@ jobs:
           name: unit-test-and-lint-reports
           path: |
             app/build/reports/tests/
-            app/build/reports/paparazzi/
-            app/build/paparazzi/failures/
+            app/build/outputs/roborazzi/
+            app/src/test/screenshots/
             app/build/reports/lint-results-debug.html
             app/build/test-results/
           if-no-files-found: ignore

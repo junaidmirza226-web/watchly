@@ -22,8 +22,10 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.watchly.app.data.downloads.DownloadPolicy
 import com.watchly.app.data.downloads.DownloadStatus
 import com.watchly.app.data.downloads.DownloadsRepository
+import com.watchly.app.data.downloads.StartDownloadOutcome
 import com.watchly.app.data.library.WatchlistRepository
 import com.watchly.app.data.model.CastMember
 import com.watchly.app.data.model.Episode
@@ -65,6 +67,12 @@ data class TitleDetailsUiState(
     val isWatched: Boolean = false,
     /** Live download state for this title, null when never downloaded. */
     val downloadStatus: DownloadStatus? = null,
+    /**
+     * Non-null while the download quality picker is open (spec
+     * §7.1): the files the user can choose between, best first.
+     * Null whenever no choice is pending.
+     */
+    val qualityChoices: List<PlayableFile>? = null,
     /** 0..1 download progress while active; null when indeterminate. */
     val downloadProgress: Float? = null,
     /** Episode keys ("S1E2") marked watched, for the selected title. */
@@ -324,31 +332,66 @@ class TitleDetailsViewModel(
                 )
             }
             else -> {
-                val started = runCatching {
-                    repo.startDownload(state.title, state.playableFiles.first())
+                // Spec §7.1: when the source offers more than one
+                // quality, the user picks BEFORE anything starts.
+                // A single file needs no choice and starts at once.
+                val options = DownloadPolicy.qualityOptions(state.playableFiles)
+                if (options.size > 1) {
+                    _uiState.update { it.copy(qualityChoices = options) }
+                } else {
+                    startChosenDownload(options.first())
                 }
-                started.fold(
-                    onSuccess = { record ->
-                        _uiState.update {
-                            it.copy(
-                                downloadStatus = record.status,
-                                downloadProgress = record.progressFraction,
-                                infoMessage = "Download started — “${it.title.name}” " +
-                                    "will be in My Library → Downloads."
-                            )
-                        }
-                    },
-                    onFailure = {
-                        _uiState.update {
-                            it.copy(
-                                infoMessage = "Couldn't start the download. Check " +
-                                    "your connection and storage space, then try again."
-                            )
-                        }
-                    }
-                )
             }
         }
+    }
+
+    /** The user picked a quality in the picker: start that file. */
+    fun onQualityChosen(file: PlayableFile) {
+        _uiState.update { it.copy(qualityChoices = null) }
+        startChosenDownload(file)
+    }
+
+    /** The user closed the quality picker without picking. */
+    fun onQualityPickerDismissed() {
+        _uiState.update { it.copy(qualityChoices = null) }
+    }
+
+    /**
+     * Starts [file] through the §7.3-checked repository path: the
+     * start can be refused (Wi-Fi only, low battery, space, cap)
+     * with a plain reason, or allowed with a warning — either way
+     * the outcome lands in the info message, never a dead button.
+     */
+    private fun startChosenDownload(file: PlayableFile) {
+        val state = _uiState.value
+        val repo = downloads ?: return
+        runCatching { repo.startDownloadChecked(state.title, file) }.fold(
+            onSuccess = { outcome ->
+                when (outcome) {
+                    is StartDownloadOutcome.Started -> _uiState.update {
+                        it.copy(
+                            downloadStatus = outcome.record.status,
+                            downloadProgress = outcome.record.progressFraction,
+                            infoMessage = "Download started — “${it.title.name}” " +
+                                "will be in My Library → Downloads." +
+                                (outcome.warning?.let { warning -> " $warning" }
+                                    ?: "")
+                        )
+                    }
+                    is StartDownloadOutcome.Refused -> _uiState.update {
+                        it.copy(infoMessage = outcome.message)
+                    }
+                }
+            },
+            onFailure = {
+                _uiState.update {
+                    it.copy(
+                        infoMessage = "Couldn't start the download. Check " +
+                            "your connection and storage space, then try again."
+                    )
+                }
+            }
+        )
     }
 
     /** Clears the info note once shown/dismissed. */
