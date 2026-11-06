@@ -24,6 +24,8 @@
  *  - GET /search/multi?query=                    → unified search (movies + TV)
  *  - GET /movie/:id                              → full movie details
  *  - GET /movie/:id/credits                      → movie cast
+ *  - GET /movie/:id/watch/providers              → where-to-watch (movie)
+ *  - GET /tv/:id/watch/providers                 → where-to-watch (TV)
  * All failures throw; callers catch and degrade gracefully.
  */
 package com.watchly.app.data.remote
@@ -31,6 +33,10 @@ package com.watchly.app.data.remote
 import com.watchly.app.data.model.CastMember
 import com.watchly.app.data.model.MediaType
 import com.watchly.app.data.model.Title
+import com.watchly.app.data.model.WatchCategory
+import com.watchly.app.data.model.WatchProvider
+import com.watchly.app.data.model.WatchProviders
+import com.watchly.app.data.model.combineWatchProviders
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -187,6 +193,26 @@ object TmdbApi {
             parseCredits(httpGet("$BASE_URL/movie/$tmdbId/credits?api_key=${apiKey.enc()}"))
         }
 
+    /**
+     * Official watch options for one title: which legal services
+     * stream, rent or sell it in [region] (an ISO country code like
+     * "PK" or "US"). Movies use `/movie/:id/watch/providers`; TV and
+     * ANIME titles use `/tv/:id/watch/providers`. Only called when the
+     * user has saved a key.
+     */
+    suspend fun fetchWatchProviders(
+        apiKey: String,
+        mediaType: MediaType,
+        tmdbId: Int,
+        region: String
+    ): WatchProviders = withContext(Dispatchers.IO) {
+        val segment = if (mediaType == MediaType.MOVIE) "movie" else "tv"
+        parseWatchProviders(
+            httpGet("$BASE_URL/$segment/$tmdbId/watch/providers?api_key=${apiKey.enc()}"),
+            region
+        )
+    }
+
     // ------------------------------------------------------------------
     // Parsing (internal so unit tests can feed saved responses)
     // ------------------------------------------------------------------
@@ -246,6 +272,51 @@ object TmdbApi {
             )
         }
         return members
+    }
+
+    /**
+     * Parses a watch/providers response for [preferredRegion]. When
+     * TMDB has no entry for that region, the US entry is used instead
+     * and the result's region says "US" — the UI shows which region
+     * the options are for, so the fallback is never silent. When
+     * neither exists, the result is honestly empty.
+     */
+    internal fun parseWatchProviders(body: String, preferredRegion: String): WatchProviders {
+        val results = runCatching {
+            JSONObject(body).optJSONObject("results")
+        }.getOrNull() ?: return WatchProviders(preferredRegion, null, emptyList())
+        val region = when {
+            results.has(preferredRegion) -> preferredRegion
+            results.has("US") -> "US"
+            else -> preferredRegion
+        }
+        val entry = results.optJSONObject(region)
+            ?: return WatchProviders(region, null, emptyList())
+        fun parseList(key: String, category: WatchCategory): List<WatchProvider> {
+            val array = entry.optJSONArray(key) ?: return emptyList()
+            val providers = ArrayList<WatchProvider>(array.length())
+            for (i in 0 until array.length()) {
+                val row = array.optJSONObject(i) ?: continue
+                val name = row.optText("provider_name") ?: continue
+                providers.add(
+                    WatchProvider(
+                        name = name,
+                        logoUrl = imageUrl(row.optText("logo_path"), "w92"),
+                        category = category
+                    )
+                )
+            }
+            return providers
+        }
+        return WatchProviders(
+            region = region,
+            watchPageUrl = entry.optText("link"),
+            providers = combineWatchProviders(
+                parseList("flatrate", WatchCategory.STREAM),
+                parseList("rent", WatchCategory.RENT),
+                parseList("buy", WatchCategory.BUY)
+            )
+        )
     }
 
     /**

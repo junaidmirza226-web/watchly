@@ -9,7 +9,8 @@
  * Loading is per-provider and degrades gracefully: a failed episode
  * fetch still shows the header, cast and sources. TMDB titles (when
  * the user has saved their key) are enriched with TMDB details and
- * cast. Play navigates to the Media3 player when a playable source
+ * cast, plus where-to-watch: the official services that stream, rent
+ * or sell the title in the device's region. Play navigates to the Media3 player when a playable source
  * exists (wired by the screen). Download starts a real offline
  * download for titles with a playable file (public-domain Archive
  * films in v1); for catalogue-only titles it says plainly why there
@@ -29,7 +30,9 @@ import com.watchly.app.data.model.Episode
 import com.watchly.app.data.model.Playability
 import com.watchly.app.data.model.PlayableFile
 import com.watchly.app.data.model.Title
+import com.watchly.app.data.model.WatchProviders
 import com.watchly.app.data.model.playability
+import com.watchly.app.data.model.preferredWatchRegion
 import com.watchly.app.data.remote.ArchiveApi
 import com.watchly.app.data.remote.TmdbApi
 import com.watchly.app.data.remote.TvMazeApi
@@ -40,6 +43,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 data class TitleDetailsUiState(
     val title: Title,
@@ -48,6 +52,13 @@ data class TitleDetailsUiState(
     val episodesBySeason: Map<Int, List<Episode>> = emptyMap(),
     val selectedSeason: Int? = null,
     val cast: List<CastMember> = emptyList(),
+    /**
+     * Official services offering this title (TMDB where-to-watch).
+     * Null when the section doesn't apply — no TMDB id, no saved key,
+     * or the fetch failed. Non-null but empty is a real answer: TMDB
+     * lists nothing for the region, and the page says exactly that.
+     */
+    val watchProviders: WatchProviders? = null,
     /** Playable/downloadable files (Internet Archive in v1). */
     val playableFiles: List<PlayableFile> = emptyList(),
     val isInWatchlist: Boolean = false,
@@ -164,6 +175,23 @@ class TitleDetailsViewModel(
             } else {
                 null
             }
+            // Where-to-watch for TMDB titles, same key conditions.
+            // Region = the device's country (US when unusable); TMDB
+            // itself falls back to US data and the result says so.
+            val watchProviders = if (title.tmdbId != null && apiKey != null) {
+                async {
+                    runCatching {
+                        TmdbApi.fetchWatchProviders(
+                            apiKey,
+                            title.mediaType,
+                            title.tmdbId,
+                            preferredWatchRegion(Locale.getDefault().country)
+                        )
+                    }
+                }
+            } else {
+                null
+            }
 
             val failures = ArrayList<String>()
             var enriched = title
@@ -183,6 +211,9 @@ class TitleDetailsViewModel(
             val playable = files?.await()?.getOrElse {
                 failures.add("sources"); emptyList()
             }.orEmpty()
+            val watch = watchProviders?.await()?.getOrElse {
+                failures.add("providers"); null
+            }
 
             // Current download state for this title (if any) so the
             // Download button can label itself honestly.
@@ -196,6 +227,7 @@ class TitleDetailsViewModel(
                     selectedSeason = episodeList.map { ep -> ep.season }
                         .distinct().minOrNull(),
                     cast = castList,
+                    watchProviders = watch,
                     playableFiles = playable,
                     downloadStatus = downloadRecord?.status,
                     downloadProgress = downloadRecord?.progressFraction,

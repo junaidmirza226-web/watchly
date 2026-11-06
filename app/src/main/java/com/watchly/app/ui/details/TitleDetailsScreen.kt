@@ -12,6 +12,7 @@
 package com.watchly.app.ui.details
 
 import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -73,6 +74,7 @@ import com.watchly.app.data.model.MediaType
 import com.watchly.app.data.model.Playability
 import com.watchly.app.data.model.PlayableFile
 import com.watchly.app.data.model.Title
+import com.watchly.app.data.model.WatchProvider
 import com.watchly.app.ui.components.PlayabilityBadge
 import com.watchly.app.ui.theme.WatchlyGold
 import com.watchly.app.ui.theme.WatchlyGoldLight
@@ -218,6 +220,43 @@ fun TitleDetailsScreen(
                     onToggleWatched = { viewModel.toggleEpisodeWatched(episode) },
                     onPlay = viewModel::onPlayRequested
                 )
+            }
+            item { Spacer(Modifier.height(24.dp)) }
+        }
+
+        // Where-to-watch: shown only when TMDB was actually asked
+        // (title has a TMDB id and the user saved a key). An empty
+        // answer gets an honest line, not a blank space.
+        state.watchProviders?.let { watch ->
+            item { SectionHeading("Where to watch") }
+            item {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                ) {
+                    if (watch.providers.isEmpty()) {
+                        Text(
+                            text = "No official streaming, rental or purchase " +
+                                "options are listed for this title in " +
+                                "${watch.region} yet.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        watch.providers.forEach { provider ->
+                            WatchProviderRow(
+                                provider = provider,
+                                watchPageUrl = watch.watchPageUrl
+                            )
+                        }
+                        Text(
+                            text = "Options for ${watch.region}, via TMDB. " +
+                                "Tapping a service opens its official watch page.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
             item { Spacer(Modifier.height(24.dp)) }
         }
@@ -598,6 +637,76 @@ private fun EpisodeRow(
                 imageVector = if (watched) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
                 contentDescription = if (watched) "Mark unwatched" else "Mark watched",
                 tint = if (watched) WatchlyGold else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun WatchProviderRow(provider: WatchProvider, watchPageUrl: String?) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .then(
+                if (watchPageUrl != null) {
+                    Modifier.clickable {
+                        // TMDB supplies one watch page per title +
+                        // region (JustWatch-powered); it opens in the
+                        // browser / official apps from there.
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(watchPageUrl))
+                        )
+                    }
+                } else {
+                    Modifier
+                }
+            )
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surface),
+            contentAlignment = Alignment.Center
+        ) {
+            if (provider.logoUrl != null) {
+                AsyncImage(
+                    model = provider.logoUrl,
+                    contentDescription = provider.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Text(
+                    text = provider.name.take(1).uppercase(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = WatchlyGold
+                )
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = provider.name,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = provider.category.label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (watchPageUrl != null) {
+            Text(
+                text = "Open",
+                style = MaterialTheme.typography.labelLarge,
+                color = WatchlyGold
             )
         }
     }

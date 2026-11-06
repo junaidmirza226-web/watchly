@@ -1,6 +1,7 @@
 package com.watchly.app.data.remote
 
 import com.watchly.app.data.model.MediaType
+import com.watchly.app.data.model.WatchCategory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -186,5 +187,89 @@ class TmdbApiTest {
         assertTrue(TmdbApi.parseSearchMulti("{}").isEmpty())
         assertTrue(TmdbApi.parseSearchMulti("not json").isEmpty())
         assertTrue(TmdbApi.parseSearchMulti("""{"results": []}""").isEmpty())
+    }
+
+    // watch/providers: one PK entry (flatrate + rent + buy, with the
+    // same service in rent and buy) and one US entry, in the real v3
+    // shape TMDB returns for /movie/:id/watch/providers.
+    private val sampleWatchProviders = """
+        {"id": 579974, "results": {
+          "PK": {
+            "link": "https://www.themoviedb.org/movie/579974/watch?locale=PK",
+            "flatrate": [
+              {"provider_id": 8, "provider_name": "Netflix",
+               "logo_path": "/netflix.jpg", "display_priority": 0}
+            ],
+            "rent": [
+              {"provider_id": 2, "provider_name": "Apple TV",
+               "logo_path": "/apple.jpg", "display_priority": 1}
+            ],
+            "buy": [
+              {"provider_id": 2, "provider_name": "Apple TV",
+               "logo_path": "/apple.jpg", "display_priority": 1},
+              {"provider_id": 3, "provider_name": "Google Play Movies",
+               "logo_path": null, "display_priority": 2}
+            ]
+          },
+          "US": {
+            "link": "https://www.themoviedb.org/movie/579974/watch?locale=US",
+            "flatrate": [
+              {"provider_id": 9, "provider_name": "Amazon Prime Video",
+               "logo_path": "/prime.jpg", "display_priority": 0}
+            ]
+          }
+        }}
+    """.trimIndent()
+
+    @Test
+    fun `parses watch providers for the requested region`() {
+        val watch = TmdbApi.parseWatchProviders(sampleWatchProviders, "PK")
+
+        assertEquals("PK", watch.region)
+        assertEquals(
+            "https://www.themoviedb.org/movie/579974/watch?locale=PK",
+            watch.watchPageUrl
+        )
+        // Apple TV is in both rent and buy: shown once, as RENT.
+        assertEquals(
+            listOf("Netflix", "Apple TV", "Google Play Movies"),
+            watch.providers.map { it.name }
+        )
+        assertEquals(
+            listOf(
+                WatchCategory.STREAM,
+                WatchCategory.RENT,
+                WatchCategory.BUY
+            ),
+            watch.providers.map { it.category }
+        )
+        assertEquals(
+            "https://image.tmdb.org/t/p/w92/netflix.jpg",
+            watch.providers[0].logoUrl
+        )
+        assertNull(watch.providers[2].logoUrl)
+    }
+
+    @Test
+    fun `watch providers fall back to US when the region has no entry`() {
+        val watch = TmdbApi.parseWatchProviders(sampleWatchProviders, "FR")
+
+        assertEquals("US", watch.region)
+        assertEquals(
+            listOf("Amazon Prime Video"),
+            watch.providers.map { it.name }
+        )
+    }
+
+    @Test
+    fun `watch providers are honestly empty when no region matches`() {
+        val usOnlyGone = """{"id": 1, "results": {"DE": {"link": "x"}}}"""
+        val watch = TmdbApi.parseWatchProviders(usOnlyGone, "PK")
+
+        assertEquals("PK", watch.region)
+        assertNull(watch.watchPageUrl)
+        assertTrue(watch.providers.isEmpty())
+        assertTrue(TmdbApi.parseWatchProviders("not json", "PK").providers.isEmpty())
+        assertTrue(TmdbApi.parseWatchProviders("{}", "PK").providers.isEmpty())
     }
 }

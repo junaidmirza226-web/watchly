@@ -14,6 +14,7 @@ import com.watchly.app.data.model.CastMember
 import com.watchly.app.data.model.MediaType
 import com.watchly.app.data.model.PlayableFile
 import com.watchly.app.data.model.Title
+import com.watchly.app.data.model.WatchProviders
 import com.watchly.app.data.remote.ArchiveApi
 import com.watchly.app.data.remote.TmdbApi
 import com.watchly.app.data.remote.TvMazeApi
@@ -121,6 +122,11 @@ class TitleDetailsTmdbDownloadsTest {
             coEvery { TmdbApi.fetchMovieCast("user-key", 579974) } returns listOf(
                 CastMember("Ram Charan", "Alluri Sitarama Raju")
             )
+            // Where-to-watch is fetched in the same load; TMDB lists
+            // nothing for this title in the stubbed region answer.
+            coEvery {
+                TmdbApi.fetchWatchProviders("user-key", MediaType.MOVIE, 579974, any())
+            } returns WatchProviders("US", null, emptyList())
 
             val viewModel = TitleDetailsViewModel(stub, library, keyRepo, downloads)
             advanceUntilIdle(); idle()
@@ -131,6 +137,9 @@ class TitleDetailsTmdbDownloadsTest {
             assertEquals("tt8178634", state.title.imdbId)
             assertEquals(listOf("Ram Charan"), state.cast.map { it.personName })
             assertEquals("TMDB", state.ratingSourceLabel)
+            // Asked, and honestly empty — not null (null = never asked).
+            assertEquals("US", state.watchProviders?.region)
+            assertTrue(state.watchProviders!!.providers.isEmpty())
         }
 
     @Test
@@ -149,6 +158,8 @@ class TitleDetailsTmdbDownloadsTest {
         assertEquals("RRR", state.title.name)
         assertEquals(null, state.title.runtimeMinutes)
         assertTrue(state.cast.isEmpty())
+        // No key → where-to-watch is never asked, section stays absent.
+        assertEquals(null, state.watchProviders)
     }
 
     @Test
