@@ -9,6 +9,3 @@ captures
 .externalNativeBuild
 .cxx
 .kotlin/
-
-# Held back until GitHub grants the workflow scope (token limit, 2026-11-06)
-.github/workflows/android-tests.yml
