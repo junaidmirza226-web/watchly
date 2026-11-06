@@ -1,0 +1,21 @@
+version: 2.1
+
+orbs:
+  android: circleci/android@2
+
+jobs:
+  unit-tests:
+    executor:
+      name: android/android_docker
+    steps:
+      - checkout
+      - android/restore-gradle-cache
+      - run:
+          name: Unit tests, screenshot verification and lint
+          command: ./gradlew testDebugUnitTest lintDebug --stacktrace
+      - android/save-gradle-cache
+
+workflows:
+  build-and-test:
+    jobs:
+      - unit-tests
