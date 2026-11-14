@@ -325,8 +325,7 @@ class BrowseViewModel(
      */
     private fun BrowseUiState.withMoviesSourcePresentation(): BrowseUiState {
         if (kind != BrowseKind.MOVIES || !tmdbActive) return this
-        val archiveSource =
-            playabilityFilter == PlayabilityFilter.PLAYABLE_ONLY
+        val archiveSource = !tmdbActive
         return copy(
             genres = if (archiveSource) {
                 ArchiveApi.MOVIE_GENRES.keys.toList()
@@ -377,7 +376,9 @@ class BrowseViewModel(
         val result = runCatching {
             when (kind) {
                 BrowseKind.MOVIES -> {
-                    val apiKey = if (useTmdb(state)) tmdbKeys?.getKey() else null
+                    val apiKey = if (useTmdb(state)) {
+                        tmdbKeys?.getKey() ?: TmdbKeyRepository.DEFAULT_TMDB_API_KEY
+                    } else null
                     val tmdbResult = if (apiKey != null) {
                         runCatching {
                             TmdbApi.discoverMovies(
@@ -397,6 +398,8 @@ class BrowseViewModel(
 
                     if (!tmdbResult.isNullOrEmpty()) {
                         tmdbResult
+                    } else if (state.selectedIndustry != null) {
+                        emptyList()
                     } else {
                         val cinemeta = runCatching {
                             CinemetaApi.fetchTrendingMovies(skip = (page - 1) * PAGE_SIZE)
@@ -430,7 +433,9 @@ class BrowseViewModel(
                     genre = state.selectedGenre
                 )
                 BrowseKind.SHOWS -> {
-                    val apiKey = if (useTmdb(state)) tmdbKeys?.getKey() else null
+                    val apiKey = if (useTmdb(state)) {
+                        tmdbKeys?.getKey() ?: TmdbKeyRepository.DEFAULT_TMDB_API_KEY
+                    } else null
                     val tmdbResult = if (apiKey != null) {
                         runCatching {
                             TmdbApi.discoverTv(
