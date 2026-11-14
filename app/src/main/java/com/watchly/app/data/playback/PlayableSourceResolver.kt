@@ -73,9 +73,10 @@ object PlayableSourceResolver {
 
                 for (stream in streamSources) {
                     PlayableMediaHeaders.register(stream.url, stream.headers)
-                    val isWebEmbed = !stream.isHls && !stream.url.contains(".m3u8", ignoreCase = true) &&
-                        !stream.url.contains(".mp4", ignoreCase = true) &&
-                        (stream.url.contains("/embed") || stream.url.contains("vidsrc") || stream.url.contains("autoembed") || stream.url.contains("2embed"))
+                    val isDirectStream = stream.url.contains(".m3u8", ignoreCase = true) ||
+                        stream.url.contains(".mp4", ignoreCase = true) ||
+                        stream.url.contains(".mkv", ignoreCase = true)
+                    val isWebEmbed = !isDirectStream
 
                     if (isWebEmbed) {
                         if (firstEmbedUrl == null) firstEmbedUrl = stream.url
