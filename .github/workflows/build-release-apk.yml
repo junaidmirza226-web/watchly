@@ -75,18 +75,18 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.4.7
-          name: Watchly v1.4.7
+          tag_name: v1.4.8
+          name: Watchly v1.4.8
           body: |
-            ## Watchly MovieBox-Grade Streaming & Downloads (v1.4.7)
+            ## Watchly MovieBox-Grade Streaming & Bollywood Filters (v1.4.8)
             
             ### What's New:
-            - **Updated App Version Label:** Corrected app version code & name to v1.4.7 across Gradle and AppUpdateChecker.
-            - **Authentic Samsung S21 Viewport Profile:** Cloud emulator updated from legacy Nexus 6 to 1080x2400 20:9 S21 geometry.
-            - **Cinemeta Modern Catalog:** Global CDN movie & TV show catalog with sub-100ms response times.
-            - **No More Buffering Hangs:** Dual-mode playback engine (ExoPlayer for direct HLS/MP4 + In-App Web Stream Player for embed sources).
-            - **Full High-Speed Downloads:** Direct Download button in video player controls and Title Details screen powered by SegmentedDownloader.
-            - **Embedded TMDB Master Key:** Out-of-the-box keyless access to global trending blockbusters and industry rows.
+            - **Featured Bollywood Hits & South Cinema:** Added dedicated Bollywood and Tollywood rows directly under Trending Movies on Home screen.
+            - **Fully Working Industry Filters:** Browse tab now lets you filter Movies by Bollywood, Tollywood, Kollywood, Mollywood, Punjabi Cinema, Bengali Cinema, Hollywood, and Korean Cinema seamlessly.
+            - **Embedded TMDB Engine:** Embedded user master key seamlessly on first boot so blockbusters and regional cinema load instantly with zero user setup.
+            - **Zero Dead Rows & Resilient Loading:** Cinemeta CDN and modern API failovers ensure movies and TV shows always load with no partial failure errors.
+            - **Dual-Mode High Performance Streaming & Downloads:** ExoPlayer direct streams + Web Stream Player for multi-source embed links.
+            - **Automatic In-App Updates:** Sideloaded APKs now check for new releases on startup and offer a 1-tap "Update Now" installation prompt.
           files: release-output/watchly.apk
           draft: false
           prerelease: false
