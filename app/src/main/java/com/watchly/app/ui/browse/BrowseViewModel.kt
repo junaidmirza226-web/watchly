@@ -96,26 +96,22 @@ class BrowseViewModel(
     private val uiPrefs: UiPreferencesRepository? = null
 ) : ViewModel() {
 
-    /** Movies tab only: is TMDB the active catalogue source right now? */
+    /** Movies and Shows: is TMDB the active catalogue source right now? */
     private var tmdbActive: Boolean =
-        kind == BrowseKind.MOVIES && tmdbKeys?.hasKey() == true
+        (kind == BrowseKind.MOVIES || kind == BrowseKind.SHOWS) && tmdbKeys?.hasKey() == true
 
     private val _uiState = MutableStateFlow(moviesAwareInitialState())
     val uiState: StateFlow<BrowseUiState> = _uiState.asStateFlow()
 
-    /** Initial state, shaped by which Movies source is active. */
-    // The presentation pass at the end matters (cycle 7): when
-    // the persisted playability filter is already ▶ Playable, a
-    // keyed Movies tab's effective source is the Archive from the
-    // very first frame — building TMDB chip rows here would pair
-    // the wrong genre/industry/sort lists with the grid until the
-    // user happened to flip the filter.
+    /** Initial state, shaped by which Movies/Shows source is active. */
     private fun moviesAwareInitialState(): BrowseUiState = BrowseUiState(
         kind = kind,
         genres = when {
             kind == BrowseKind.MOVIES && tmdbActive ->
                 TmdbApi.MOVIE_GENRES.values.toList()
             kind == BrowseKind.MOVIES -> ArchiveApi.MOVIE_GENRES.keys.toList()
+            kind == BrowseKind.SHOWS && tmdbActive ->
+                TmdbApi.TV_GENRES.values.toList()
             kind == BrowseKind.SHOWS -> SHOW_GENRES
             else -> AniListApi.ANIME_GENRES
         },
@@ -127,7 +123,7 @@ class BrowseViewModel(
         },
         tmdbActive = tmdbActive,
         showTmdbPrompt = kind == BrowseKind.MOVIES && !tmdbActive,
-        industries = if (tmdbActive) INDUSTRIES else emptyList(),
+        industries = if (kind == BrowseKind.MOVIES && tmdbActive) INDUSTRIES else emptyList(),
         playabilityFilter = uiPrefs?.playabilityFilter() ?: PlayabilityFilter.ALL,
         // Cycle 5: the tab's genre choice is persisted per tab.
         selectedGenre = uiPrefs?.genreFor(genreScope)
@@ -184,7 +180,13 @@ class BrowseViewModel(
                     loadYouTubeExtras()
                     loadServerPage(reset = true)
                 }
-                BrowseKind.SHOWS -> loadShowsPages()
+                BrowseKind.SHOWS -> {
+                    if (useTmdb(_uiState.value)) {
+                        loadServerPage(reset = true)
+                    } else {
+                        loadShowsPages()
+                    }
+                }
             }
         }
     }
@@ -207,15 +209,10 @@ class BrowseViewModel(
     }
 
     /**
-     * Movies source truth (cycle 7): TMDB is the catalogue only
-     * while the user is NOT filtering to playable-only. TMDB
-     * titles are catalogue-only, so under ▶ Playable the tab
-     * browses the Archive's playable catalogue instead — with no
-     * key saved the Archive is the source in every filter anyway.
+     * TMDB is the active catalogue when a key is present for Movies & Shows.
      */
     private fun useTmdb(state: BrowseUiState): Boolean =
-        kind == BrowseKind.MOVIES && tmdbActive &&
-            state.playabilityFilter != PlayabilityFilter.PLAYABLE_ONLY
+        (kind == BrowseKind.MOVIES || kind == BrowseKind.SHOWS) && tmdbActive
 
     /** Loads the next chunk when the user scrolls near the end of the grid. */
     fun loadMore() {
@@ -224,7 +221,13 @@ class BrowseViewModel(
         viewModelScope.launch {
             when (kind) {
                 BrowseKind.MOVIES, BrowseKind.ANIME -> loadServerPage(reset = false)
-                BrowseKind.SHOWS -> loadShowsPages()
+                BrowseKind.SHOWS -> {
+                    if (useTmdb(_uiState.value)) {
+                        loadServerPage(reset = false)
+                    } else {
+                        loadShowsPages()
+                    }
+                }
             }
         }
     }
@@ -232,16 +235,15 @@ class BrowseViewModel(
     /**
      * Called when the tab becomes visible: syncs the persisted
      * playability filter (it may have been changed on Search or
-     * Home), and — Movies only — if the TMDB key situation changed
+     * Home), and if the TMDB key situation changed
      * (key added/removed since this ViewModel loaded), switch the
-     * Movies source and reload.
+     * source and reload.
      */
     fun refreshKeyState() {
         val persisted = uiPrefs?.playabilityFilter()
         if (persisted != null && persisted != _uiState.value.playabilityFilter) {
             applyPlayabilityFilter(persisted)
         }
-        if (kind != BrowseKind.MOVIES) return
         val activeNow = tmdbKeys?.hasKey() == true
         if (activeNow == tmdbActive) return
         tmdbActive = activeNow
@@ -419,7 +421,24 @@ class BrowseViewModel(
                     },
                     genre = state.selectedGenre
                 )
-                BrowseKind.SHOWS -> error("Shows tab does not use server paging")
+                BrowseKind.SHOWS -> {
+                    val apiKey = if (useTmdb(state)) tmdbKeys?.getKey() else null
+                    if (apiKey != null) {
+                        TmdbApi.discoverTv(
+                            apiKey = apiKey,
+                            genreId = TmdbApi.tvGenreIdFor(state.selectedGenre),
+                            sort = when (state.sort) {
+                                BrowseSort.POPULAR -> TmdbApi.MovieSort.POPULAR
+                                BrowseSort.TOP_RATED -> TmdbApi.MovieSort.TOP_RATED
+                                BrowseSort.NEWEST -> TmdbApi.MovieSort.NEWEST
+                                BrowseSort.A_Z -> TmdbApi.MovieSort.A_Z
+                            },
+                            page = page
+                        )
+                    } else {
+                        TvMazeApi.fetchShowsPage(page)
+                    }
+                }
             }
         }
         var chainAnotherPage = false
