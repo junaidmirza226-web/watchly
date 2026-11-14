@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Hd
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPictureAlt
@@ -149,6 +150,18 @@ fun PlayerScreen(
     if (youtubeVideoId != null) {
         YouTubePlayerLayout(
             videoId = youtubeVideoId,
+            titleName = state.title.name,
+            episodeLabel = state.episodeLabel,
+            onBack = onBack,
+            modifier = modifier
+        )
+        return
+    }
+
+    val webEmbedUrl = state.webEmbedUrl
+    if (webEmbedUrl != null) {
+        WebStreamPlayerLayout(
+            streamUrl = webEmbedUrl,
             titleName = state.title.name,
             episodeLabel = state.episodeLabel,
             onBack = onBack,
@@ -331,6 +344,7 @@ fun PlayerScreen(
                 onSubtitlesClick = viewModel::openSubtitles,
                 onAudioClick = { audioMenuOpen = true },
                 onQualityClick = { qualityMenuOpen = true },
+                onDownloadClick = viewModel::downloadCurrentMedia,
                 onPipClick = {
                     activity?.enterWatchlyPip(state.isPlaying)
                     Unit
@@ -456,7 +470,7 @@ private fun UpNextCard(
                 contentDescription =
                     "Up next: ${item.title.name}" +
                         (item.episodeLabel?.let { ", $it" } ?: "") +
-                        ", playing in $secondsLeft seconds"
+                        ", playing in ${secondsLeft} seconds"
             }
     ) {
         Text(
@@ -517,6 +531,7 @@ private fun PlayerControls(
     onSubtitlesClick: () -> Unit = {},
     onAudioClick: () -> Unit = {},
     onQualityClick: () -> Unit = {},
+    onDownloadClick: () -> Unit = {},
     onPipClick: () -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -550,6 +565,14 @@ private fun PlayerControls(
                         color = WatchlyGoldLight
                     )
                 }
+            }
+            // Download button (MovieBox feature).
+            IconButton(onClick = onDownloadClick) {
+                Icon(
+                    imageVector = Icons.Filled.Download,
+                    contentDescription = "Download",
+                    tint = WatchlyGold
+                )
             }
             // Picture-in-Picture (cycle 9 §5.3).
             IconButton(onClick = onPipClick) {
@@ -785,13 +808,6 @@ private fun PlayerErrorPanel(
 
 private const val CONTROLS_HIDE_MS: Long = 4_000L
 
-/**
- * Applies the saved subtitle appearance (§6.2) to the player's
- * subtitle view: the user's text size and background win over
- * anything embedded in the subtitle file, so the style is the
- * same on every title. White text with a black outline stays
- * readable on bright and dark frames alike.
- */
 @OptIn(UnstableApi::class)
 @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 internal fun applySubtitleStyle(playerView: PlayerView, style: SubtitleStyle) {
@@ -818,21 +834,6 @@ internal fun applySubtitleStyle(playerView: PlayerView, style: SubtitleStyle) {
     )
 }
 
-/**
- * Mutable swipe-gesture state for the player (§5.2).
- *
- * One drag is one gesture: the dominant axis on the first movement
- * decides the mode, and the mode never changes mid-drag.
- *  - Vertical, right half → volume (AudioManager music stream).
- *  - Vertical, left half → screen brightness (this window only).
- *  - Horizontal → scrub; the preview time is shown live and the
- *    seek is committed when the finger lifts.
- *
- * Kept in a plain holder (not Compose state) because it is written
- * from pointer-input callbacks; only the hint text it returns is
- * Compose state. Pure arithmetic lives in [applyDrag] so the mode
- * choice is unit-testable through [PlaybackRules.clampSeek].
- */
 private class PlayerGestureState {
     private var mode: Mode? = null
     private var startX: Float = 0f
@@ -878,10 +879,6 @@ private class PlayerGestureState {
         }
     }
 
-    /**
-     * Applies one drag step. Returns the hint text to show, or null
-     * when the gesture has not moved far enough to pick a mode yet.
-     */
     fun applyDrag(dragAmount: androidx.compose.ui.geometry.Offset, context: Context): String? {
         totalDx += dragAmount.x
         totalDy += dragAmount.y
@@ -899,7 +896,6 @@ private class PlayerGestureState {
         }
         return when (mode) {
             Mode.VOLUME -> {
-                // Full-height swipe = the whole volume range.
                 val fraction = (-totalDy / height).coerceIn(-1f, 1f)
                 val level = (startVolume + fraction * maxVolume)
                     .toInt().coerceIn(0, maxVolume)
@@ -918,7 +914,6 @@ private class PlayerGestureState {
                 "Brightness ${(level * 100).toInt()}%"
             }
             Mode.SCRUB -> {
-                // Full-width swipe = the whole video.
                 val deltaMs = (totalDx / width * durationMs).toLong()
                 scrubPreviewMs = PlaybackRules.clampSeek(startPositionMs, deltaMs, durationMs)
                 PlaybackRules.formatTime(scrubPreviewMs)
