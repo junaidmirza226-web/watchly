@@ -27,7 +27,7 @@ data class AppUpdateInfo(
 object AppUpdateChecker {
 
     private const val GITHUB_RELEASES_API_URL =
-        "https://api.github.com/repos/watchly-app/watchly/releases/latest"
+        "https://api.github.com/repos/junaidmirza226-web/watchly/releases/latest"
 
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -116,12 +116,22 @@ object AppUpdateChecker {
         return false
     }
 
+    fun triggerInstall(context: android.content.Context, downloadUrl: String) {
+        runCatching {
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                data = android.net.Uri.parse(downloadUrl)
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }
+    }
+
     private fun getCurrentVersion(): String {
         return try {
             val clazz = Class.forName("com.watchly.app.BuildConfig")
-            clazz.getField("VERSION_NAME").get(null) as? String ?: "1.4.7"
+            clazz.getField("VERSION_NAME").get(null) as? String ?: "1.4.8"
         } catch (_: Throwable) {
-            "1.4.7"
+            "1.4.8"
         }
     }
 }
