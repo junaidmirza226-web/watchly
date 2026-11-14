@@ -108,26 +108,6 @@ fun BrowseScreen(
             )
         )
 
-        // The playability filter bar (Phase D) stays visible in
-        // every state — including empty — so a filter that hides
-        // everything is always one tap from being lifted.
-        PlayabilityFilterBar(
-            selected = state.playabilityFilter,
-            onSelect = viewModel::setPlayabilityFilter,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-        )
-
-        // Cycle 5: the genre / sort / industry chips live OUTSIDE
-        // the state switch, so they stay reachable in every state —
-        // above all in the filter-empty state, where the genre that
-        // caused the empty grid must be changeable.
-        BrowseChipRows(
-            state = state,
-            onGenreSelected = viewModel::selectGenre,
-            onSortSelected = viewModel::selectSort,
-            onIndustrySelected = viewModel::selectIndustry
-        )
-
         when {
             state.isLoading -> BrowseLoading()
             // Load failed with NOTHING loaded: the full error
@@ -157,7 +137,10 @@ fun BrowseScreen(
             else -> BrowseGrid(
                 state = state,
                 gridState = gridState,
-                onTitleClick = onTitleClick
+                onTitleClick = onTitleClick,
+                onGenreSelected = viewModel::selectGenre,
+                onSortSelected = viewModel::selectSort,
+                onIndustrySelected = viewModel::selectIndustry
             )
         }
     }
@@ -245,24 +228,12 @@ private fun BrowseChipRows(
 private fun BrowseGrid(
     state: BrowseUiState,
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
-    onTitleClick: (Title) -> Unit
+    onTitleClick: (Title) -> Unit,
+    onGenreSelected: (String?) -> Unit,
+    onSortSelected: (BrowseSort) -> Unit,
+    onIndustrySelected: (com.watchly.app.data.browse.Industry?) -> Unit
 ) {
     Column(Modifier.fillMaxSize()) {
-        // No-key note (Movies tab): the public-domain catalogue is
-        // showing; a free TMDB key unlocks the full, self-updating
-        // catalogue. Honest and non-blocking.
-        if (state.showTmdbPrompt) {
-            Text(
-                text = "Showing free public-domain films. Add your free TMDB key " +
-                    "in My Library to unlock the full movie catalogue — every " +
-                    "industry, always up to date.",
-                style = MaterialTheme.typography.bodySmall,
-                color = WatchlyGoldLight,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-        }
-
-
         state.errorMessage?.let { message ->
             Text(
                 text = message,
@@ -275,11 +246,20 @@ private fun BrowseGrid(
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
             state = gridState,
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxSize()
         ) {
+            // Chip filters inside the grid so they scroll naturally with the content
+            item(span = { GridItemSpan(3) }) {
+                BrowseChipRows(
+                    state = state,
+                    onGenreSelected = onGenreSelected,
+                    onSortSelected = onSortSelected,
+                    onIndustrySelected = onIndustrySelected
+                )
+            }
             items(state.visibleTitles, key = { it.stableKey }) { title ->
                 PosterCard(title = title, onClick = { onTitleClick(title) })
             }
