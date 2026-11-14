@@ -50,7 +50,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.watchly.app.data.browse.BrowseSort
 import com.watchly.app.data.model.Title
 import com.watchly.app.data.model.PlayabilityFilter
-import com.watchly.app.ui.components.PlayabilityFilterBar
 import com.watchly.app.ui.components.PosterCard
 import com.watchly.app.ui.theme.WatchlyGold
 import com.watchly.app.ui.theme.WatchlyGoldLight
@@ -246,7 +245,7 @@ private fun BrowseGrid(
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
             state = gridState,
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 88.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxSize()
