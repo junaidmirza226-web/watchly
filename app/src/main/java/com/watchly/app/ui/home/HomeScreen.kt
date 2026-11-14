@@ -197,43 +197,28 @@ private fun HomeContent(
             )
         }
 
-        // The shared playability filter (Phase D), right under
-        // the hero: applies to every row below at read time.
-        item {
-            PlayabilityFilterBar(
-                selected = state.playabilityFilter,
-                onSelect = onFilterChange,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-        }
-
-        // No-key guidance (cycle 14, first-run audit): without a
-        // TMDB key the industry rows below simply never appear,
-        // and nothing used to say why — the state even tracked
-        // hasTmdbKey without the screen ever reading it. One card,
-        // only in the no-key state, naming exactly what the free
-        // key turns on; it disappears for good once a key is saved.
-        if (!state.hasTmdbKey) {
-            item {
-                TmdbUnlockCard(
-                    onClick = onTmdbClick,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-        }
-
         // Trending rows (visible = playability-filtered views). The
         // three backbone rows know whether their load FAILED and
         // offer Retry instead of a dead-end empty message.
         item {
             TitleRow(
-                heading = "Public-Domain Picks",
+                heading = "Trending Movies",
                 titles = state.visibleMovies,
-                emptyMessage = "No public-domain films available right now.",
+                emptyMessage = "No movies available right now.",
                 onTitleClick = onHeroTitleClick,
                 failed = "Movies" in state.failedSections,
                 onRetry = onRetry
             )
+        }
+        if (state.topRatedMovies.isNotEmpty()) {
+            item {
+                TitleRow(
+                    heading = "Top Rated Movies",
+                    titles = state.topRatedMovies,
+                    emptyMessage = "",
+                    onTitleClick = onHeroTitleClick
+                )
+            }
         }
         item {
             TitleRow(
@@ -244,6 +229,16 @@ private fun HomeContent(
                 failed = "TV shows" in state.failedSections,
                 onRetry = onRetry
             )
+        }
+        if (state.topRatedShows.isNotEmpty()) {
+            item {
+                TitleRow(
+                    heading = "Top Rated TV Series",
+                    titles = state.topRatedShows,
+                    emptyMessage = "",
+                    onTitleClick = onHeroTitleClick
+                )
+            }
         }
         item {
             TitleRow(
