@@ -39,16 +39,7 @@ jobs:
           mkdir -p signing
           if [ ! -f signing/watchly.jks ]; then
             echo "Creating persistent release keystore..."
-            keytool -genkeypair -v \
-              -keystore signing/watchly.jks \
-              -storetype PKCS12 \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -alias watchly \
-              -storepass watchly123 \
-              -keypass watchly123 \
-              -dname "CN=Watchly, OU=Watchly App, O=Watchly, L=Unknown, ST=Unknown, C=US"
+            keytool -genkeypair -v               -keystore signing/watchly.jks               -storetype PKCS12               -keyalg RSA               -keysize 2048               -validity 10000               -alias watchly               -storepass watchly123               -keypass watchly123               -dname "CN=Watchly, OU=Watchly App, O=Watchly, L=Unknown, ST=Unknown, C=US"
           fi
 
       - name: Build Release APK
@@ -84,15 +75,15 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.4.4
-          name: Watchly v1.4.4
+          tag_name: v1.4.5
+          name: Watchly v1.4.5
           body: |
-            ## Watchly Premium Streaming (v1.4.4)
+            ## Watchly Premium Streaming (v1.4.5)
             
             ### What's New:
-            - **End-to-End One-Click Streaming:** Play button on all movies & TV episodes now directly triggers the 17-source multi-provider streaming aggregator.
-            - **TV Episode Direct Stream:** Tapping any TV season episode seamlessly requests live streams for that exact Season and Episode.
-            - **Clean Details Header:** Completely removed catalog-only restrictions and badges for an uncluttered MovieBox experience.
+            - **Resilient Dual-Source Fallback:** Zero red error banners; automatically falls back to TVmaze & Archive catalogues if TMDB key is unconfigured.
+            - **Direct Streaming Integration:** Play button on all movies & TV episodes triggers the 17-source streaming aggregator.
+            - **Remote Configuration Fix:** Corrected remote provider repository URL so OTA sources sync seamlessly.
             - **Dual Cloud Phone Testing:** Verified simultaneously on Google Pixel 6 and Samsung Galaxy profiles in GitHub Actions.
           files: release-output/watchly.apk
           draft: false
