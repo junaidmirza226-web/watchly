@@ -42,6 +42,7 @@ import com.watchly.app.data.model.Title
 import com.watchly.app.data.model.filteredBy
 import com.watchly.app.data.remote.AniListApi
 import com.watchly.app.data.remote.ArchiveApi
+import com.watchly.app.data.remote.CinemetaApi
 import com.watchly.app.data.remote.TmdbApi
 import com.watchly.app.data.remote.TvMazeApi
 import com.watchly.app.data.remote.YouTubeApi
@@ -397,17 +398,24 @@ class BrowseViewModel(
                     if (!tmdbResult.isNullOrEmpty()) {
                         tmdbResult
                     } else {
-                        ArchiveApi.fetchMoviesPage(
-                            page = page,
-                            perPage = PAGE_SIZE,
-                            sort = when (state.sort) {
-                                BrowseSort.POPULAR, BrowseSort.TOP_RATED ->
-                                    ArchiveApi.MovieSort.POPULAR
-                                BrowseSort.NEWEST -> ArchiveApi.MovieSort.NEWEST
-                                BrowseSort.A_Z -> ArchiveApi.MovieSort.A_Z
-                            },
-                            genre = state.selectedGenre
-                        )
+                        val cinemeta = runCatching {
+                            CinemetaApi.fetchTrendingMovies(skip = (page - 1) * PAGE_SIZE)
+                        }.getOrNull()
+                        if (!cinemeta.isNullOrEmpty()) {
+                            cinemeta
+                        } else {
+                            ArchiveApi.fetchMoviesPage(
+                                page = page,
+                                perPage = PAGE_SIZE,
+                                sort = when (state.sort) {
+                                    BrowseSort.POPULAR, BrowseSort.TOP_RATED ->
+                                        ArchiveApi.MovieSort.POPULAR
+                                    BrowseSort.NEWEST -> ArchiveApi.MovieSort.NEWEST
+                                    BrowseSort.A_Z -> ArchiveApi.MovieSort.A_Z
+                                },
+                                genre = state.selectedGenre
+                            )
+                        }
                     }
                 }
                 BrowseKind.ANIME -> AniListApi.fetchAnimePage(
@@ -442,7 +450,14 @@ class BrowseViewModel(
                     if (!tmdbResult.isNullOrEmpty()) {
                         tmdbResult
                     } else {
-                        TvMazeApi.fetchShowsPage(page)
+                        val cinemeta = runCatching {
+                            CinemetaApi.fetchTrendingShows(skip = (page - 1) * PAGE_SIZE)
+                        }.getOrNull()
+                        if (!cinemeta.isNullOrEmpty()) {
+                            cinemeta
+                        } else {
+                            TvMazeApi.fetchShowsPage(page)
+                        }
                     }
                 }
             }
