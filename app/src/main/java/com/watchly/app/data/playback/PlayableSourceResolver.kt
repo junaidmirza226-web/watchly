@@ -1,17 +1,8 @@
 /*
  * Watchly — resolves what the player can actually start for a
- * title (cycle 5). Used by autoplay-next (the player must know the
- * next item REALLY plays before offering it) and by List Detail's
- * Play button.
- *
- * Order of truth:
- *  1. The user's on-device SAF file.
- *  2. A completed download of the title (offline beats streaming).
- *  3. The title's Internet Archive files (fetched live).
- *  4. Multi-source streaming providers (TMDB / IMDb live streams).
- *  5. An official-YouTube video id (plays in the official player).
- * Anything else resolves to "not playable" — the badge rule alone
- * is never trusted for a continuation the user didn't tap.
+ * title. Prioritizes local files, completed downloads, and fast multi-source
+ * cloud streaming providers (VidSrc, SuperStream, 2Embed, AutoEmbed, Embed.su, etc.)
+ * over slow legacy archive sources.
  */
 package com.watchly.app.data.playback
 
@@ -26,10 +17,11 @@ import com.watchly.app.data.remote.providers.StreamAggregator
 /** What the player can start for one title. */
 data class ResolvedPlayable(
     val files: List<PlayableFile> = emptyList(),
-    val youtubeVideoId: String? = null
+    val youtubeVideoId: String? = null,
+    val webEmbedUrl: String? = null
 ) {
     val isPlayable: Boolean
-        get() = files.isNotEmpty() || youtubeVideoId != null
+        get() = files.isNotEmpty() || youtubeVideoId != null || webEmbedUrl != null
 
     companion object {
         val NOT_PLAYABLE = ResolvedPlayable()
@@ -45,7 +37,7 @@ object PlayableSourceResolver {
         season: Int? = null,
         episode: Int? = null
     ): ResolvedPlayable {
-        // 0) The user's own on-device file (cycle 5): direct source.
+        // 0) The user's own on-device file: direct source.
         title.localUri?.let { uri ->
             return ResolvedPlayable(
                 files = listOf(
@@ -69,7 +61,55 @@ object PlayableSourceResolver {
                 )
             }
         }
-        // 2) Internet Archive files, fetched live.
+        // 2) Fast multi-source streaming providers (VidSrc, AutoEmbed, SuperStream, 2Embed, Embed.su)
+        if (title.imdbId != null || title.tmdbId != null || title.name.isNotBlank()) {
+            val streamSources = runCatching {
+                StreamAggregator.getStreams(title, season = season, episode = episode)
+            }.getOrDefault(emptyList())
+
+            if (streamSources.isNotEmpty()) {
+                val directFiles = mutableListOf<PlayableFile>()
+                var firstEmbedUrl: String? = null
+
+                for (stream in streamSources) {
+                    PlayableMediaHeaders.register(stream.url, stream.headers)
+                    val isWebEmbed = !stream.isHls && !stream.url.contains(".m3u8", ignoreCase = true) &&
+                        !stream.url.contains(".mp4", ignoreCase = true) &&
+                        (stream.url.contains("/embed") || stream.url.contains("vidsrc") || stream.url.contains("autoembed") || stream.url.contains("2embed"))
+
+                    if (isWebEmbed) {
+                        if (firstEmbedUrl == null) firstEmbedUrl = stream.url
+                        directFiles.add(
+                            PlayableFile(
+                                url = stream.url,
+                                fileName = "${title.name} (${stream.providerName} - Web Player)",
+                                format = "EMBED",
+                                qualityLabel = "HD Web • ${stream.providerName}",
+                                headers = stream.headers
+                            )
+                        )
+                    } else {
+                        directFiles.add(
+                            PlayableFile(
+                                url = stream.url,
+                                fileName = "${title.name} (${stream.providerName} - ${stream.quality})",
+                                format = if (stream.isHls) "HLS" else "MP4",
+                                qualityLabel = "${stream.quality} • ${stream.providerName}",
+                                headers = stream.headers
+                            )
+                        )
+                    }
+                }
+
+                if (directFiles.isNotEmpty()) {
+                    return ResolvedPlayable(
+                        files = directFiles,
+                        webEmbedUrl = firstEmbedUrl
+                    )
+                }
+            }
+        }
+        // 3) Internet Archive files, fetched live (fallback).
         val archiveId = title.archiveId
         if (archiveId != null) {
             val files = runCatching {
@@ -77,26 +117,7 @@ object PlayableSourceResolver {
             }.getOrDefault(emptyList())
             if (files.isNotEmpty()) return ResolvedPlayable(files = files)
         }
-        // 2.5) Multi-source streaming providers (TMDB / IMDb)
-        if (title.tmdbId != null || title.imdbId != null) {
-            val streamSources = runCatching {
-                StreamAggregator.getStreams(title, season = season, episode = episode)
-            }.getOrDefault(emptyList())
-            if (streamSources.isNotEmpty()) {
-                val files = streamSources.map { stream ->
-                    PlayableMediaHeaders.register(stream.url, stream.headers)
-                    PlayableFile(
-                        url = stream.url,
-                        fileName = "${title.name} (${stream.providerName} - ${stream.quality})",
-                        format = if (stream.isHls) "HLS" else "MP4",
-                        qualityLabel = "${stream.quality} • ${stream.providerName}",
-                        headers = stream.headers
-                    )
-                }
-                return ResolvedPlayable(files = files)
-            }
-        }
-        // 3) Official YouTube video (embedded player).
+        // 4) Official YouTube video (embedded player).
         val youtubeId = title.youtubeId
         if (youtubeId != null) {
             return ResolvedPlayable(youtubeVideoId = youtubeId)
