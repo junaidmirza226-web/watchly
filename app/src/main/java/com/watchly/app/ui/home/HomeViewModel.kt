@@ -3,7 +3,7 @@
  *
  * Modern MovieBox-grade home state:
  * - Cinemeta API for keyless global trending blockbusters & top rated movies/shows
- * - TMDB API integration when user key is provided
+ * - TMDB API integration with master key (Bollywood, Tollywood, Punjabi, etc.)
  * - TVmaze and AniList for shows and anime
  * - Resilient silent fallbacks and zero dead rows
  */
@@ -53,7 +53,7 @@ data class HomeUiState(
     val shows: List<Title> = emptyList(),
     val topRatedShows: List<Title> = emptyList(),
     val anime: List<Title> = emptyList(),
-    /** Per-industry TMDB rows. Empty unless a TMDB key is saved. */
+    /** Per-industry TMDB rows (Bollywood, Tollywood, Punjabi, etc.). */
     val industryRows: List<IndustryRow> = emptyList(),
     val youtubeRows: List<NamedTitleRow> = emptyList(),
     val archiveRows: List<NamedTitleRow> = emptyList(),
@@ -91,9 +91,16 @@ data class HomeUiState(
      * Modern blockbuster titles with posters for the rotating hero banner.
      */
     val heroCandidates: List<Title>
-        get() = (visibleMovies + visibleShows + visibleAnime)
-            .filter { it.posterUrl != null }
-            .take(6)
+        get() {
+            val bollywoodTitles = industryRows.firstOrNull { it.industry.languageCode == "hi" }?.titles ?: emptyList()
+            val candidates = (visibleMovies + bollywoodTitles + visibleShows + visibleAnime)
+            return candidates
+                .sortedBy {
+                    if (it.playability() == Playability.PLAYABLE) 0 else 1
+                }
+                .filter { it.posterUrl != null }
+                .take(6)
+        }
 
     val isEmpty: Boolean
         get() = !isLoading && visibleMovies.isEmpty() && visibleShows.isEmpty() &&
@@ -148,15 +155,15 @@ class HomeViewModel(
             it.copy(isLoading = true, errorMessage = null, failedSections = emptySet())
         }
         viewModelScope.launch {
-            val apiKey = tmdbKeys?.getKey()
-            val hasKey = apiKey != null
+            val effectiveApiKey = tmdbKeys?.getKey() ?: TmdbKeyRepository.DEFAULT_TMDB_API_KEY
+            val hasKey = tmdbKeys?.hasKey() == true || effectiveApiKey.isNotBlank()
             _uiState.update { it.copy(hasTmdbKey = hasKey) }
 
-            // 1. Trending Movies: Cinemeta modern blockbusters + TMDB discover
+            // 1. Trending Movies: TMDB -> Cinemeta -> Archive
             val moviesDeferred = async {
                 runCatching {
-                    val tmdb = if (apiKey != null) {
-                        runCatching { TmdbApi.fetchTrendingMovies(apiKey) }.getOrNull()
+                    val tmdb = if (hasKey) {
+                        runCatching { TmdbApi.fetchTrendingMovies(effectiveApiKey) }.getOrNull()
                     } else null
                     if (!tmdb.isNullOrEmpty()) tmdb else {
                         val cinemeta = runCatching { CinemetaApi.fetchTrendingMovies() }.getOrNull()
@@ -165,21 +172,21 @@ class HomeViewModel(
                 }
             }
 
-            // 2. Top Rated Movies: Cinemeta top rated
+            // 2. Top Rated Movies: TMDB -> Cinemeta
             val topRatedMoviesDeferred = async {
                 runCatching {
-                    val tmdb = if (apiKey != null) {
-                        runCatching { TmdbApi.fetchTopRatedMovies(apiKey) }.getOrNull()
+                    val tmdb = if (hasKey) {
+                        runCatching { TmdbApi.fetchTopRatedMovies(effectiveApiKey) }.getOrNull()
                     } else null
                     if (!tmdb.isNullOrEmpty()) tmdb else CinemetaApi.fetchTopRatedMovies()
                 }
             }
 
-            // 3. Trending TV Shows: Cinemeta + TVmaze
+            // 3. Trending TV Shows: TMDB -> Cinemeta -> TVmaze
             val showsDeferred = async {
                 runCatching {
-                    val tmdb = if (apiKey != null) {
-                        runCatching { TmdbApi.fetchTrendingTv(apiKey) }.getOrNull()
+                    val tmdb = if (hasKey) {
+                        runCatching { TmdbApi.fetchTrendingTv(effectiveApiKey) }.getOrNull()
                     } else null
                     if (!tmdb.isNullOrEmpty()) tmdb else {
                         val cinemeta = runCatching { CinemetaApi.fetchTrendingShows() }.getOrNull()
@@ -188,11 +195,11 @@ class HomeViewModel(
                 }
             }
 
-            // 4. Top Rated TV Shows
+            // 4. Top Rated TV Shows: TMDB -> Cinemeta
             val topRatedShowsDeferred = async {
                 runCatching {
-                    val tmdb = if (apiKey != null) {
-                        runCatching { TmdbApi.fetchTopRatedTv(apiKey) }.getOrNull()
+                    val tmdb = if (hasKey) {
+                        runCatching { TmdbApi.fetchTopRatedTv(effectiveApiKey) }.getOrNull()
                     } else null
                     if (!tmdb.isNullOrEmpty()) tmdb else CinemetaApi.fetchTopRatedShows()
                 }
@@ -222,7 +229,15 @@ class HomeViewModel(
                     topRatedShows = topRatedShowsResult.getOrDefault(emptyList()),
                     anime = animeResult.getOrDefault(emptyList()),
                     failedSections = failures.toSet(),
-                    errorMessage = null
+                    errorMessage = when {
+                        failures.size == 3 ->
+                            "Couldn't load content. Check your connection and try again."
+                        failures.size == 1 ->
+                            "Couldn't load ${failures.first()}. Showing what we could fetch."
+                        failures.size == 2 ->
+                            "Couldn't load ${failures.joinToString(" and ")}. Showing what we could fetch."
+                        else -> null
+                    }
                 )
             }
 
@@ -258,13 +273,13 @@ class HomeViewModel(
             }
             _uiState.update { it.copy(traktRow = traktRow) }
 
-            // Industry rows (if TMDB key present)
-            if (apiKey != null) {
+            // Industry rows (Bollywood, Tollywood, Punjabi, Kollywood, etc.)
+            if (hasKey) {
                 val rows = INDUSTRIES.map { industry ->
                     async {
                         runCatching {
                             TmdbApi.discoverMovies(
-                                apiKey = apiKey,
+                                apiKey = effectiveApiKey,
                                 language = industry.languageCode,
                                 page = 1
                             ).take(INDUSTRY_ROW_SIZE)
@@ -302,6 +317,6 @@ class HomeViewModelFactory(
                 UiPreferencesRepository(context.applicationContext)
             ) as T
         }
-        throw IllegalArgumentException("Unknown ViewModel class: $modelClass")
+        throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
     }
 }
