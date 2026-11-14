@@ -88,7 +88,6 @@ import com.watchly.app.data.model.Playability
 import com.watchly.app.data.model.PlayableFile
 import com.watchly.app.data.model.Title
 import com.watchly.app.data.model.WatchProvider
-import com.watchly.app.ui.components.PlayabilityBadge
 import com.watchly.app.ui.theme.WatchlyGold
 import com.watchly.app.ui.theme.watchlyGoldButtonColors
 import com.watchly.app.ui.theme.WatchlyGoldLight
@@ -160,27 +159,12 @@ fun TitleDetailsScreen(
             DetailsHeader(
                 state = state,
                 onPlay = {
-                    when {
-                        state.hasPlayableSource ->
-                            onPlay(
-                                state.title, state.playableFiles, null,
-                                state.upNextQueue
-                            )
-                        // Official-YouTube title: no files — the
-                        // player route opens the official embedded
-                        // player for this video id.
-                        state.title.youtubeId != null ->
-                            onPlay(
-                                state.title, emptyList(), null,
-                                state.upNextQueue
-                            )
-                        // Files check failed (Phase D): Play retries
-                        // the check instead of declaring the title
-                        // unplayable — unknown is not absent.
-                        state.filesCheckFailed ->
-                            viewModel.retryFilesCheck()
-                        else -> viewModel.onPlayRequested()
-                    }
+                    onPlay(
+                        state.title,
+                        state.playableFiles,
+                        null,
+                        state.upNextQueue
+                    )
                 },
                 onRetryFiles = viewModel::retryFilesCheck,
                 onToggleWatchlist = viewModel::toggleWatchlist,
@@ -309,7 +293,14 @@ fun TitleDetailsScreen(
                     episode = episode,
                     watched = state.watchedEpisodes.contains("S${episode.season}E${episode.number}"),
                     onToggleWatched = { viewModel.toggleEpisodeWatched(episode) },
-                    onPlay = viewModel::onPlayRequested
+                    onPlay = {
+                        onPlay(
+                            state.title,
+                            emptyList(),
+                            "S${episode.season}E${episode.number} - ${episode.name}",
+                            state.upNextQueue
+                        )
+                    }
                 )
             }
             item { Spacer(Modifier.height(24.dp)) }
@@ -815,11 +806,6 @@ private fun DetailsHeader(
                 }
             }
 
-            // "Playable" (gold) vs "Info only" (muted), from the real
-            // file list once loaded. Info-only titles say in plain
-            // words why Play has nothing to play.
-            Spacer(Modifier.height(10.dp))
-            PlayabilityBadge(playability = state.playability)
             // Phase D: the files check failed — say so, with a
             // working Retry, instead of claiming "no video file".
             if (state.filesCheckFailed) {
@@ -836,15 +822,6 @@ private fun DetailsHeader(
                         Text("Retry", color = WatchlyGold)
                     }
                 }
-            }
-            if (!state.isLoading && state.playability == Playability.INFO_ONLY) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "This title is in the catalogue for now — no video " +
-                        "file is available to play yet.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
 
             // Ratings: one badge per provider that supplied a rating,
@@ -948,9 +925,7 @@ private fun DetailsHeader(
                 // only prints a note.
                 Button(
                     onClick = onPlay,
-                    enabled = state.hasPlayableSource ||
-                        state.title.youtubeId != null ||
-                        state.filesCheckFailed,
+                    enabled = true,
                     colors = watchlyGoldButtonColors(),
                     modifier = Modifier.weight(1f)
                 ) {
