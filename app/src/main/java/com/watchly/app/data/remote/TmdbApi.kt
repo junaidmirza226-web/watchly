@@ -30,7 +30,7 @@
  *  - GET /movie/:id/recommendations, /tv/:id/recommendations → more like this
  *  - GET /tv/:id/credits                          → TV cast (cycle 11)
  *  - GET /person/:id                              → person page details (cycle 11)
- *  - GET /person/:id/combined_credits             → person "known for" (cycle 11)
+ *  - GET /person/:id/combined_credits             → person 'known for' (cycle 11)
  * All failures throw; callers catch and degrade gracefully.
  */
 package com.watchly.app.data.remote
@@ -100,8 +100,8 @@ object TmdbApi {
 
     /**
      * TMDB TV genre ids → display names. The TV table differs from the
-     * movie table (e.g. 10759 "Action & Adventure", 10765 "Sci-Fi &
-     * Fantasy"), so search results map TV genres through this, not
+     * movie table (e.g. 10759 'Action & Adventure', 10765 'Sci-Fi &
+     * Fantasy'), so search results map TV genres through this, not
      * [MOVIE_GENRES]. Unknown ids are skipped, as with movies.
      */
     val TV_GENRES: Map<Int, String> = linkedMapOf(
@@ -123,6 +123,12 @@ object TmdbApi {
         37 to "Western"
     )
 
+    /** Genre display name → TMDB TV genre id (for the Shows tab chips). */
+    fun tvGenreIdFor(name: String?): Int? =
+        name?.let { wanted ->
+            TV_GENRES.entries.firstOrNull { it.value.equals(wanted, ignoreCase = true) }?.key
+        }
+
     // ------------------------------------------------------------------
     // Network calls
     // ------------------------------------------------------------------
@@ -130,7 +136,7 @@ object TmdbApi {
     /**
      * True when TMDB accepts [apiKey]. A 401 means the key itself is
      * wrong (returns false); network failures throw so the caller can
-     * tell "bad key" apart from "no connection".
+     * tell 'bad key' apart from 'no connection'.
      */
     suspend fun validateKey(apiKey: String): Boolean =
         withContext(Dispatchers.IO) {
@@ -144,7 +150,7 @@ object TmdbApi {
 
     /**
      * One page of the movie catalogue via discover. [language] is an
-     * ISO 639-1 original-language code ("hi" Bollywood, "te"
+     * ISO 639-1 original-language code ('hi' Bollywood, 'te'
      * Tollywood, …) or null for all languages. [genreId] filters by
      * TMDB genre. Results are canonical [Title]s with tmdbId set.
      */
@@ -163,13 +169,59 @@ object TmdbApi {
         language?.let { params.append("&with_original_language=").append(it.enc()) }
         genreId?.let { params.append("&with_genres=").append(it) }
         if (sort == MovieSort.TOP_RATED) {
-            // Without a vote floor, "top rated" is all 10.0 obscurities.
+            // Without a vote floor, 'top rated' is all 10.0 obscurities.
             params.append("&vote_count.gte=300")
         }
         parseMovieList(httpGet("$BASE_URL/discover/movie$params"))
     }
 
-    /** Full details for one movie (`GET /movie/:id`). */
+    /**
+     * One page of the TV show catalogue via discover. [genreId] filters by
+     * TMDB TV genre. Results are canonical [Title]s with tmdbId set.
+     */
+    suspend fun discoverTv(
+        apiKey: String,
+        genreId: Int? = null,
+        sort: MovieSort = MovieSort.POPULAR,
+        page: Int = 1
+    ): List<Title> = withContext(Dispatchers.IO) {
+        val params = StringBuilder()
+        params.append("?api_key=").append(apiKey.enc())
+        params.append("&include_adult=false")
+        params.append("&page=").append(page)
+        params.append("&sort_by=").append(sort.sortParam.enc())
+        genreId?.let { params.append("&with_genres=").append(it) }
+        if (sort == MovieSort.TOP_RATED) {
+            params.append("&vote_count.gte=100")
+        }
+        parseTvList(httpGet("$BASE_URL/discover/tv$params"))
+    }
+
+    /** Top Trending Movies of the week. */
+    suspend fun fetchTrendingMovies(apiKey: String, page: Int = 1): List<Title> =
+        withContext(Dispatchers.IO) {
+            parseMovieList(httpGet("$BASE_URL/trending/movie/week?api_key=${apiKey.enc()}&page=$page"))
+        }
+
+    /** Top Trending TV Shows of the week. */
+    suspend fun fetchTrendingTv(apiKey: String, page: Int = 1): List<Title> =
+        withContext(Dispatchers.IO) {
+            parseTvList(httpGet("$BASE_URL/trending/tv/week?api_key=${apiKey.enc()}&page=$page"))
+        }
+
+    /** Top Rated Movies of all time. */
+    suspend fun fetchTopRatedMovies(apiKey: String, page: Int = 1): List<Title> =
+        withContext(Dispatchers.IO) {
+            parseMovieList(httpGet("$BASE_URL/movie/top_rated?api_key=${apiKey.enc()}&page=$page"))
+        }
+
+    /** Top Rated TV Series of all time. */
+    suspend fun fetchTopRatedTv(apiKey: String, page: Int = 1): List<Title> =
+        withContext(Dispatchers.IO) {
+            parseTvList(httpGet("$BASE_URL/tv/top_rated?api_key=${apiKey.enc()}&page=$page"))
+        }
+
+    /** Full details for one movie (GET /movie/:id). */
     suspend fun fetchMovieDetails(apiKey: String, tmdbId: Int): Title =
         withContext(Dispatchers.IO) {
             val body = httpGet("$BASE_URL/movie/$tmdbId?api_key=${apiKey.enc()}")
@@ -178,9 +230,9 @@ object TmdbApi {
         }
 
     /**
-     * Multi-search (`GET /search/multi`): one call finds movies and TV
+     * Multi-search (GET /search/multi): one call finds movies and TV
      * shows for [query]. Results carry their TMDB ids, so Title Details
-     * enrichment works for them. "person" results are skipped —
+     * enrichment works for them. 'person' results are skipped —
      * unified search stays titles-only even though person pages
      * (§3.3, cycle 11) exist; they're reached from cast rows.
      * Returns an empty list for a blank query. Only called when the
@@ -195,14 +247,14 @@ object TmdbApi {
             parseSearchMulti(httpGet(url))
         }
 
-    /** Main cast for one movie (`GET /movie/:id/credits`), billing order. */
+    /** Main cast for one movie (GET /movie/:id/credits), billing order. */
     suspend fun fetchMovieCast(apiKey: String, tmdbId: Int): List<CastMember> =
         withContext(Dispatchers.IO) {
             parseCredits(httpGet("$BASE_URL/movie/$tmdbId/credits?api_key=${apiKey.enc()}"))
         }
 
     /**
-     * Main cast for one TV show (`GET /tv/:id/credits`), billing
+     * Main cast for one TV show (GET /tv/:id/credits), billing
      * order (cycle 11). Same response shape as the movie endpoint.
      * Until this existed, a TMDB-sourced show had no cast row at
      * all — and no way into the person pages (§3.3).
@@ -213,7 +265,7 @@ object TmdbApi {
         }
 
     /**
-     * One person's page data (`GET /person/:id`, cycle 11, §3.3).
+     * One person's page data (GET /person/:id, cycle 11, §3.3).
      * Throws when TMDB has no such person — the caller shows the
      * honest load-failed state, never a fabricated page.
      */
@@ -225,8 +277,8 @@ object TmdbApi {
         }
 
     /**
-     * "Known for" (cycle 11, §3.3): the person's combined movie +
-     * TV credits (`GET /person/:id/combined_credits`), strongest
+     * 'Known for' (cycle 11, §3.3): the person's combined movie +
+     * TV credits (GET /person/:id/combined_credits), strongest
      * first. Results are canonical [Title]s that open their own
      * details pages like any other card.
      */
@@ -241,7 +293,7 @@ object TmdbApi {
     }
 
     /**
-     * Resolves an IMDb id to a TMDB id (`GET /find/:id` with
+     * Resolves an IMDb id to a TMDB id (GET /find/:id with
      * external_source=imdb_id) — Phase D: titles that came from
      * TVmaze/AniList carry an IMDb id but no TMDB id, and this is
      * what lets their details page show watch providers and TMDB
@@ -274,8 +326,8 @@ object TmdbApi {
     /**
      * Official watch options for one title: which legal services
      * stream, rent or sell it in [region] (an ISO country code like
-     * "PK" or "US"). Movies use `/movie/:id/watch/providers`; TV and
-     * ANIME titles use `/tv/:id/watch/providers`. Only called when the
+     * 'PK' or 'US'). Movies use /movie/:id/watch/providers; TV and
+     * ANIME titles use /tv/:id/watch/providers. Only called when the
      * user has saved a key.
      */
     suspend fun fetchWatchProviders(
@@ -293,7 +345,7 @@ object TmdbApi {
 
     /**
      * The YouTube key of the title's official trailer (spec §4.1,
-     * cycle 10), from `GET /{movie|tv}/:id/videos`. Returns null
+     * cycle 10), from GET /{movie|tv}/:id/videos. Returns null
      * when TMDB lists no suitable YouTube video — the details page
      * then simply has no Trailer button; nothing is invented.
      * Only called when the user has saved a key.
@@ -310,9 +362,9 @@ object TmdbApi {
     }
 
     /**
-     * "More like this" (spec §4.1, cycle 10): TMDB's own
-     * recommendations for one title, `GET /{movie|tv}/:id/
-     * recommendations`. Results are canonical [Title]s of the same
+     * 'More like this' (spec §4.1, cycle 10): TMDB's own
+     * recommendations for one title, GET /{movie|tv}/:id/recommendations.
+     * Results are canonical [Title]s of the same
      * kind as the source title. Only called with a saved key.
      */
     suspend fun fetchRecommendations(
@@ -331,7 +383,7 @@ object TmdbApi {
     // Parsing (internal so unit tests can feed saved responses)
     // ------------------------------------------------------------------
 
-    /** Parses a discover/trending/search response (`results` array). */
+    /** Parses a discover/trending/search response ('results' array). */
     internal fun parseMovieList(body: String): List<Title> {
         val results = runCatching {
             JSONObject(body).optJSONArray("results")
@@ -344,7 +396,20 @@ object TmdbApi {
         return titles
     }
 
-    /** Parses a search/multi response (`results` array). */
+    /** Parses a TV show discover/trending response ('results' array). */
+    internal fun parseTvList(body: String): List<Title> {
+        val results = runCatching {
+            JSONObject(body).optJSONArray("results")
+        }.getOrNull() ?: return emptyList()
+        val titles = ArrayList<Title>(results.length())
+        for (i in 0 until results.length()) {
+            val tv = results.optJSONObject(i) ?: continue
+            parseTv(tv)?.let { titles.add(it) }
+        }
+        return titles
+    }
+
+    /** Parses a search/multi response ('results' array). */
     internal fun parseSearchMulti(body: String): List<Title> {
         val results = runCatching {
             JSONObject(body).optJSONArray("results")
@@ -355,7 +420,7 @@ object TmdbApi {
             when (row.optText("media_type")) {
                 "movie" -> parseMovie(row, detailed = false)?.let { titles.add(it) }
                 "tv" -> parseTv(row)?.let { titles.add(it) }
-                // "person" rows are skipped: unified search is
+                // 'person' rows are skipped: unified search is
                 // titles-only; person pages open from cast rows.
                 else -> Unit
             }
@@ -369,7 +434,7 @@ object TmdbApi {
         return parseMovie(movie, detailed = true)
     }
 
-    /** Parses a credits response (`cast` array) into [CastMember]s. */
+    /** Parses a credits response ('cast' array) into [CastMember]s. */
     internal fun parseCredits(body: String): List<CastMember> {
         val cast = runCatching {
             JSONObject(body).optJSONArray("cast")
@@ -400,8 +465,8 @@ object TmdbApi {
     /**
      * Parses a /person response into a [Person] (cycle 11, §3.3).
      * Null when the body has no usable name/id. A blank biography
-     * stays null — the page's "no biography yet" state depends on
-     * the difference between "TMDB has none" and a real bio.
+     * stays null — the page's 'no biography yet' state depends on
+     * the difference between 'TMDB has none' and a real bio.
      */
     internal fun parsePerson(body: String): Person? {
         val person = runCatching { JSONObject(body) }.getOrNull() ?: return null
@@ -421,14 +486,14 @@ object TmdbApi {
     }
 
     /**
-     * Parses a /person/:id/combined_credits response (`cast`
+     * Parses a /person/:id/combined_credits response ('cast'
      * array) into canonical [Title]s (cycle 11, §3.3). Rows are
-     * dispatched by their own `media_type` — a person's film and
+     * dispatched by their own 'media_type' — a person's film and
      * TV work arrive mixed in one list. Crew entries are not in
-     * `cast`, so everything here is acting work. The same title
+     * 'cast', so everything here is acting work. The same title
      * can appear twice (multiple characters), so rows are deduped
      * by stable key, then ordered by TMDB's popularity so the
-     * "Known for" row leads with what they're actually known for.
+     * 'Known for' row leads with what they're actually known for.
      */
     internal fun parseCombinedCredits(body: String): List<Title> {
         val cast = runCatching {
@@ -469,7 +534,7 @@ object TmdbApi {
     /**
      * Parses a watch/providers response for [preferredRegion]. When
      * TMDB has no entry for that region, the US entry is used instead
-     * and the result's region says "US" — the UI shows which region
+     * and the result's region says 'US' — the UI shows which region
      * the options are for, so the fallback is never silent. When
      * neither exists, the result is honestly empty.
      */
@@ -543,9 +608,9 @@ object TmdbApi {
     }
 
     /**
-     * Parses a /recommendations response (`results` array). Rows
-     * are dispatched by shape — a `title` field means the movie
-     * shape, a `name` field the TV shape — because a TV title's
+     * Parses a /recommendations response ('results' array). Rows
+     * are dispatched by shape — a 'title' field means the movie
+     * shape, a 'name' field the TV shape — because a TV title's
      * recommendations are TV rows (and vice versa), and each shape
      * maps genres through its own table.
      */
@@ -568,8 +633,8 @@ object TmdbApi {
 
     /**
      * One TMDB movie object → canonical [Title]. List responses carry
-     * `genre_ids`; the details response carries `genres` objects plus
-     * `runtime` and `imdb_id`, so [detailed] switches those on.
+     * 'genre_ids'; the details response carries 'genres' objects plus
+     * 'runtime' and 'imdb_id', so [detailed] switches those on.
      */
     private fun parseMovie(movie: JSONObject, detailed: Boolean): Title? {
         val name = movie.optText("title") ?: movie.optText("original_title") ?: return null
@@ -618,7 +683,7 @@ object TmdbApi {
 
     /**
      * One TMDB TV object (search/multi or discover shape) → canonical
-     * [Title]. TV rows carry `name` / `first_air_date` instead of the
+     * [Title]. TV rows carry 'name' / 'first_air_date' instead of the
      * movie fields, and genre ids map through [TV_GENRES].
      */
     private fun parseTv(tv: JSONObject): Title? {
