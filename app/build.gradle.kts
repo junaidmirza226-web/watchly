@@ -53,6 +53,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val internalKeystore = rootProject.file("signing/watchly.jks")
     signingConfigs {
         if (hasWatchlySigning) {
             create("watchly") {
@@ -67,6 +68,13 @@ android {
                 keyAlias = watchlySigningProps.getProperty("keyAlias")
                 keyPassword = watchlySigningProps.getProperty("keyPassword")
             }
+        } else if (internalKeystore.exists()) {
+            create("watchly") {
+                storeFile = internalKeystore
+                storePassword = "watchly123"
+                keyAlias = "watchly"
+                keyPassword = "watchly123"
+            }
         }
     }
 
@@ -75,9 +83,7 @@ android {
             // Sign with the persistent Watchly key when present
             // (local builds) so every delivered build installs over
             // the previous one; platform debug key otherwise (CI).
-            if (hasWatchlySigning) {
-                signingConfig = signingConfigs.getByName("watchly")
-            }
+            signingConfig = signingConfigs.findByName("watchly") ?: signingConfigs.getByName("debug")
         }
         release {
             isMinifyEnabled = true
@@ -86,9 +92,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            if (hasWatchlySigning) {
-                signingConfig = signingConfigs.getByName("watchly")
-            }
+            signingConfig = signingConfigs.findByName("watchly") ?: signingConfigs.getByName("debug")
         }
     }
     lint {
