@@ -297,10 +297,10 @@ class PlayerViewModel(
         viewModelScope.launch {
             val repo = com.watchly.app.data.downloads.DownloadsRepository(appContext)
             val title = request.title
-            repo.enqueue(
+            repo.startDownload(
                 title = title,
                 file = file,
-                note = "Downloading ${title.name}"
+                // note
             )
         }
     }
