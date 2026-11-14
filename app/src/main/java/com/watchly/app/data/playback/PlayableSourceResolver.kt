@@ -41,7 +41,9 @@ object PlayableSourceResolver {
     /** Resolves [title]; [downloads] may be null (tests, previews). */
     suspend fun resolve(
         title: Title,
-        downloads: DownloadsRepository?
+        downloads: DownloadsRepository?,
+        season: Int? = null,
+        episode: Int? = null
     ): ResolvedPlayable {
         // 0) The user's own on-device file (cycle 5): direct source.
         title.localUri?.let { uri ->
@@ -78,7 +80,7 @@ object PlayableSourceResolver {
         // 2.5) Multi-source streaming providers (TMDB / IMDb)
         if (title.tmdbId != null || title.imdbId != null) {
             val streamSources = runCatching {
-                StreamAggregator.getStreams(title)
+                StreamAggregator.getStreams(title, season = season, episode = episode)
             }.getOrDefault(emptyList())
             if (streamSources.isNotEmpty()) {
                 val files = streamSources.map { stream ->
