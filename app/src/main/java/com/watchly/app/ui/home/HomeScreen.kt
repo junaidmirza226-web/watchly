@@ -79,6 +79,7 @@ import com.watchly.app.ui.theme.WatchlyGold
 import com.watchly.app.ui.theme.WatchlyGoldLight
 import com.watchly.app.ui.theme.WatchlySurfaceVariant
 import com.watchly.app.ui.theme.WatchlyTheme
+import com.watchly.app.ui.theme.watchlyGoldButtonColors
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -153,8 +154,6 @@ private fun HomeContent(
     onRetry: () -> Unit = {},
     onTmdbClick: () -> Unit = {}
 ) {
-    // Hero spotlight rotates through up to 5 trending titles every 8s.
-    // Rotation pauses once the user taps anything.
     val candidates = state.heroCandidates
     var heroIndex by remember { mutableIntStateOf(0) }
     var heroPaused by remember { mutableStateOf(false) }
@@ -169,13 +168,48 @@ private fun HomeContent(
         heroPaused = true
         onTitleClick(it)
     }
+    val updateInfo by com.watchly.app.data.remote.AppUpdateChecker.updateState.collectAsState()
+    val localContext = androidx.compose.ui.platform.LocalContext.current
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 88.dp), // clear bottom nav + extra breathing room
+        contentPadding = PaddingValues(bottom = 88.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
-        // Partial-failure banner
+        updateInfo?.let { update ->
+            item {
+                androidx.compose.material3.Surface(
+                    color = WatchlyGold.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "New Version Available (v${update.latestVersion})",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = WatchlyGold
+                            )
+                            Text(
+                                text = "Tap to update Watchly automatically",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Button(
+                            onClick = { com.watchly.app.data.remote.AppUpdateChecker.triggerInstall(localContext, update.downloadUrl) },
+                            colors = watchlyGoldButtonColors()
+                        ) {
+                            Text("Update")
+                        }
+                    }
+                }
+            }
+        }
+
         state.errorMessage?.let { message ->
             item {
                 Text(
@@ -187,7 +221,6 @@ private fun HomeContent(
             }
         }
 
-        // Hero — cinematic, full-bleed
         item {
             HeroSection(
                 hero = candidates.getOrNull(heroIndex % maxOf(heroCount, 1)),
@@ -195,10 +228,8 @@ private fun HomeContent(
             )
         }
 
-        // Spacer between hero and rows
         item { Spacer(Modifier.height(24.dp)) }
 
-        // Trending Movies
         item {
             TitleRow(
                 heading = "Trending Movies",
@@ -208,6 +239,30 @@ private fun HomeContent(
                 failed = "Movies" in state.failedSections,
                 onRetry = onRetry
             )
+        }
+
+        state.visibleIndustryRows.firstOrNull { it.industry.languageCode == "hi" }?.let { row ->
+            item { Spacer(Modifier.height(24.dp)) }
+            item(key = "industry-hi") {
+                TitleRow(
+                    heading = "Bollywood Hits",
+                    titles = row.titles,
+                    emptyMessage = "",
+                    onTitleClick = onHeroTitleClick
+                )
+            }
+        }
+
+        state.visibleIndustryRows.firstOrNull { it.industry.languageCode == "te" }?.let { row ->
+            item { Spacer(Modifier.height(24.dp)) }
+            item(key = "industry-te") {
+                TitleRow(
+                    heading = "Tollywood & South Cinema",
+                    titles = row.titles,
+                    emptyMessage = "",
+                    onTitleClick = onHeroTitleClick
+                )
+            }
         }
 
         if (state.topRatedMovies.isNotEmpty()) {
@@ -260,8 +315,7 @@ private fun HomeContent(
             )
         }
 
-        // Per-industry TMDB rows
-        state.visibleIndustryRows.forEach { row ->
+        state.visibleIndustryRows.filter { it.industry.languageCode !in listOf("hi", "te") }.forEach { row ->
             item { Spacer(Modifier.height(24.dp)) }
             item(key = "industry-${row.industry.languageCode}") {
                 TitleRow(
@@ -273,7 +327,6 @@ private fun HomeContent(
             }
         }
 
-        // Official YouTube channel rows
         state.visibleYoutubeRows.forEach { row ->
             item { Spacer(Modifier.height(24.dp)) }
             item(key = "youtube-${row.heading}") {
@@ -286,7 +339,6 @@ private fun HomeContent(
             }
         }
 
-        // Internet Archive rows
         state.visibleArchiveRows.forEach { row ->
             item { Spacer(Modifier.height(24.dp)) }
             item(key = "archive-${row.heading}") {
@@ -299,16 +351,24 @@ private fun HomeContent(
             }
         }
 
-        // Trending on Trakt
         state.visibleTraktRow?.let { row ->
             item { Spacer(Modifier.height(24.dp)) }
-            item(key = "trakt") {
+            item(key = "trakt-trending") {
                 TitleRow(
                     heading = row.heading,
                     titles = row.titles,
                     emptyMessage = "",
                     onTitleClick = onHeroTitleClick
                 )
+            }
+        }
+
+        if (!state.hasTmdbKey) {
+            item { Spacer(Modifier.height(24.dp)) }
+            item(key = "tmdb-unlock") {
+                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    TmdbUnlockCard(onClick = onTmdbClick)
+                }
             }
         }
     }
