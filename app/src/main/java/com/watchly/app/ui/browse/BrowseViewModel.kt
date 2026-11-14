@@ -376,26 +376,26 @@ class BrowseViewModel(
         val result = runCatching {
             when (kind) {
                 BrowseKind.MOVIES -> {
-                    // TMDB is the catalogue only outside the
-                    // ▶ Playable filter — under it, the Archive's
-                    // playable films are the source (see useTmdb).
                     val apiKey = if (useTmdb(state)) tmdbKeys?.getKey() else null
-                    if (apiKey != null) {
-                        // TMDB discover with the selected industry
-                        // (original language) and genre filters.
-                        // TMDB's page size is 20.
-                        TmdbApi.discoverMovies(
-                            apiKey = apiKey,
-                            language = state.selectedIndustry?.languageCode,
-                            genreId = TmdbApi.genreIdFor(state.selectedGenre),
-                            sort = when (state.sort) {
-                                BrowseSort.POPULAR -> TmdbApi.MovieSort.POPULAR
-                                BrowseSort.TOP_RATED -> TmdbApi.MovieSort.TOP_RATED
-                                BrowseSort.NEWEST -> TmdbApi.MovieSort.NEWEST
-                                BrowseSort.A_Z -> TmdbApi.MovieSort.A_Z
-                            },
-                            page = page
-                        )
+                    val tmdbResult = if (apiKey != null) {
+                        runCatching {
+                            TmdbApi.discoverMovies(
+                                apiKey = apiKey,
+                                language = state.selectedIndustry?.languageCode,
+                                genreId = TmdbApi.genreIdFor(state.selectedGenre),
+                                sort = when (state.sort) {
+                                    BrowseSort.POPULAR -> TmdbApi.MovieSort.POPULAR
+                                    BrowseSort.TOP_RATED -> TmdbApi.MovieSort.TOP_RATED
+                                    BrowseSort.NEWEST -> TmdbApi.MovieSort.NEWEST
+                                    BrowseSort.A_Z -> TmdbApi.MovieSort.A_Z
+                                },
+                                page = page
+                            )
+                        }.getOrNull()
+                    } else null
+
+                    if (!tmdbResult.isNullOrEmpty()) {
+                        tmdbResult
                     } else {
                         ArchiveApi.fetchMoviesPage(
                             page = page,
@@ -423,18 +423,24 @@ class BrowseViewModel(
                 )
                 BrowseKind.SHOWS -> {
                     val apiKey = if (useTmdb(state)) tmdbKeys?.getKey() else null
-                    if (apiKey != null) {
-                        TmdbApi.discoverTv(
-                            apiKey = apiKey,
-                            genreId = TmdbApi.tvGenreIdFor(state.selectedGenre),
-                            sort = when (state.sort) {
-                                BrowseSort.POPULAR -> TmdbApi.MovieSort.POPULAR
-                                BrowseSort.TOP_RATED -> TmdbApi.MovieSort.TOP_RATED
-                                BrowseSort.NEWEST -> TmdbApi.MovieSort.NEWEST
-                                BrowseSort.A_Z -> TmdbApi.MovieSort.A_Z
-                            },
-                            page = page
-                        )
+                    val tmdbResult = if (apiKey != null) {
+                        runCatching {
+                            TmdbApi.discoverTv(
+                                apiKey = apiKey,
+                                genreId = TmdbApi.tvGenreIdFor(state.selectedGenre),
+                                sort = when (state.sort) {
+                                    BrowseSort.POPULAR -> TmdbApi.MovieSort.POPULAR
+                                    BrowseSort.TOP_RATED -> TmdbApi.MovieSort.TOP_RATED
+                                    BrowseSort.NEWEST -> TmdbApi.MovieSort.NEWEST
+                                    BrowseSort.A_Z -> TmdbApi.MovieSort.A_Z
+                                },
+                                page = page
+                            )
+                        }.getOrNull()
+                    } else null
+
+                    if (!tmdbResult.isNullOrEmpty()) {
+                        tmdbResult
                     } else {
                         TvMazeApi.fetchShowsPage(page)
                     }
@@ -593,7 +599,7 @@ class BrowseViewModel(
         )
 
         // Chain: with a playability filter on, a round can add
-        // nothing the grid can show. Top up (bounded) while either
+ * nothing the grid can show. Top up (bounded) while either
         // source still has pages — same pattern as loadServerPage.
         val now = _uiState.value
         if (now.playabilityFilter != PlayabilityFilter.ALL &&
