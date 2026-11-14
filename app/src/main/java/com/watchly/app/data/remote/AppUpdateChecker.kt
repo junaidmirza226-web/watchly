@@ -1,6 +1,5 @@
 package com.watchly.app.data.remote
 
-import com.watchly.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -119,7 +118,8 @@ object AppUpdateChecker {
 
     private fun getCurrentVersion(): String {
         return try {
-            BuildConfig.VERSION_NAME
+            val clazz = Class.forName("com.watchly.app.BuildConfig")
+            clazz.getField("VERSION_NAME").get(null) as? String ?: "1.4.2"
         } catch (_: Throwable) {
             "1.4.2"
         }
