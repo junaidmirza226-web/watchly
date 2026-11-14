@@ -36,9 +36,9 @@ object RemoteProviderConfig {
     @Volatile
     private var memoryCachedProviders: List<ProviderEntry>? = null
 
-    /** Dynamically updated TMDB API key from cloud config. */
+    /** Dynamically updated TMDB API key from cloud config. Default embedded key. */
     @Volatile
-    var tmdbApiKey: String? = null
+    var tmdbApiKey: String? = "3b6bdb61d7ea586e9b15d15aad74a0e0"
 
     /**
      * Bundled fallback provider list embedded directly in the app.
