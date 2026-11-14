@@ -194,17 +194,6 @@ fun SearchScreen(
             }
         }
 
-        // The playability filter bar (Phase D): under the search
-        // field whenever a query is in play; the choice is shared
-        // with Browse/Home and persisted.
-        if (state.query.isNotBlank()) {
-            PlayabilityFilterBar(
-                selected = state.playabilityFilter,
-                onSelect = viewModel::setPlayabilityFilter,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-            )
-        }
-
         // Genre chips over the current results (cycle 5): built
         // from the genres the results actually carry, composing
         // with the playability filter above.
