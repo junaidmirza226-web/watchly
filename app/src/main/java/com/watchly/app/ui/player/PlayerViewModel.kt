@@ -86,6 +86,7 @@ data class PlayerUiState(
      * Media3 engine never starts.
      */
     val youtubeVideoId: String? = null,
+    val webEmbedUrl: String? = null,
     /** Subtitle picker is open (cycle 4, OpenSubtitles). */
     val subtitlesOpen: Boolean = false,
     /** A subtitle search/download is in flight. */
@@ -222,7 +223,7 @@ class PlayerViewModel(
             _uiState.update { it.copy(isBuffering = true, errorMessage = null) }
             viewModelScope.launch {
                 val seasonEpisodeMatch = request.episodeLabel?.let {
-                    Regex("""[sS](\d+)\s*[:eE](\d+)""").find(it)
+                    Regex("""[sS](d+)s*[:eE](d+)""").find(it)
                 }
                 val season = seasonEpisodeMatch?.groupValues?.getOrNull(1)?.toIntOrNull()
                 val episode = seasonEpisodeMatch?.groupValues?.getOrNull(2)?.toIntOrNull()
@@ -234,8 +235,18 @@ class PlayerViewModel(
                     episode = episode
                 )
                 if (resolved.files.isNotEmpty()) {
-                    _uiState.update { it.copy(files = resolved.files, isBuffering = false) }
-                    startWithFiles(resolved.files)
+                    val directFile = resolved.files.firstOrNull { it.format != "EMBED" }
+                    if (directFile != null) {
+                        _uiState.update { it.copy(files = resolved.files, isBuffering = false) }
+                        startWithFiles(resolved.files)
+                    } else if (resolved.webEmbedUrl != null) {
+                        _uiState.update { it.copy(webEmbedUrl = resolved.webEmbedUrl, isBuffering = false) }
+                    } else {
+                        _uiState.update { it.copy(files = resolved.files, isBuffering = false) }
+                        startWithFiles(resolved.files)
+                    }
+                } else if (resolved.webEmbedUrl != null) {
+                    _uiState.update { it.copy(webEmbedUrl = resolved.webEmbedUrl, isBuffering = false) }
                 } else if (resolved.youtubeVideoId != null) {
                     _uiState.update { it.copy(youtubeVideoId = resolved.youtubeVideoId, isBuffering = false) }
                 } else {
@@ -274,9 +285,24 @@ class PlayerViewModel(
         if (initialIndex != 0) {
             _uiState.update { it.copy(fileIndex = initialIndex) }
         }
-        engine.setSource(files[initialIndex].url)
+        val effectiveHeaders = files[initialIndex].headers
+        engine.setSource(files[initialIndex].url, effectiveHeaders)
         engine.setNowPlaying(request.title.name, request.episodeLabel)
         engine.play()
+    }
+
+    fun downloadCurrentMedia() {
+        val file = _uiState.value.currentFile ?: return
+        if (file.format == "EMBED") return
+        viewModelScope.launch {
+            val repo = com.watchly.app.data.downloads.DownloadsRepository(appContext)
+            val title = request.title
+            repo.enqueue(
+                title = title,
+                file = file,
+                note = "Downloading ${title.name}"
+            )
+        }
     }
 
     /** Index of the remembered Quality file, or 0 (best first). */
