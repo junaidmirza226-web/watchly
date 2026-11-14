@@ -219,11 +219,40 @@ class PlayerViewModel(
         // screen; there is no Media3 source to start.
         if (request.youtubeVideoId != null) return
         if (request.files.isEmpty()) {
-            _uiState.update {
-                it.copy(errorMessage = "Nothing to play for “${request.title.name}” yet.")
+            _uiState.update { it.copy(isBuffering = true, errorMessage = null) }
+            viewModelScope.launch {
+                val seasonEpisodeMatch = request.episodeLabel?.let {
+                    Regex("""[sS](\d+)\s*[:eE](\d+)""").find(it)
+                }
+                val season = seasonEpisodeMatch?.groupValues?.getOrNull(1)?.toIntOrNull()
+                val episode = seasonEpisodeMatch?.groupValues?.getOrNull(2)?.toIntOrNull()
+
+                val resolved = PlayableSourceResolver.resolve(
+                    request.title,
+                    com.watchly.app.data.downloads.DownloadsRepository(appContext),
+                    season = season,
+                    episode = episode
+                )
+                if (resolved.files.isNotEmpty()) {
+                    _uiState.update { it.copy(files = resolved.files, isBuffering = false) }
+                    startWithFiles(resolved.files)
+                } else if (resolved.youtubeVideoId != null) {
+                    _uiState.update { it.copy(youtubeVideoId = resolved.youtubeVideoId, isBuffering = false) }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isBuffering = false,
+                            errorMessage = "Couldn't find an active stream for “${request.title.name}”. Try again later."
+                        )
+                    }
+                }
             }
             return
         }
+        startWithFiles(request.files)
+    }
+
+    private fun startWithFiles(files: List<PlayableFile>) {
         val engine = engineFactory(appContext)
         this.engine = engine
         engine.setSpeed(_uiState.value.speed)
@@ -241,19 +270,19 @@ class PlayerViewModel(
         }
         // Cycle 9 (§5.7): start from the remembered Quality pick
         // when this title still offers that exact file.
-        val initialIndex = initialFileIndex()
+        val initialIndex = initialFileIndex(files)
         if (initialIndex != 0) {
             _uiState.update { it.copy(fileIndex = initialIndex) }
         }
-        engine.setSource(_uiState.value.files[initialIndex].url)
+        engine.setSource(files[initialIndex].url)
         engine.setNowPlaying(request.title.name, request.episodeLabel)
         engine.play()
     }
 
     /** Index of the remembered Quality file, or 0 (best first). */
-    private fun initialFileIndex(): Int {
+    private fun initialFileIndex(files: List<PlayableFile>): Int {
         val savedUrl = playback.getQualityUrl(scopedKey) ?: return 0
-        val index = request.files.indexOfFirst { it.url == savedUrl }
+        val index = files.indexOfFirst { it.url == savedUrl }
         return if (index >= 0) index else 0
     }
 
@@ -361,6 +390,10 @@ class PlayerViewModel(
     /** Retries the current source after a total failure. */
     fun retry() {
         val state = _uiState.value
+        if (state.files.isEmpty()) {
+            start()
+            return
+        }
         _uiState.update {
             it.copy(
                 errorMessage = null,
