@@ -599,7 +599,7 @@ class BrowseViewModel(
         )
 
         // Chain: with a playability filter on, a round can add
- * nothing the grid can show. Top up (bounded) while either
+        // nothing the grid can show. Top up (bounded) while either
         // source still has pages — same pattern as loadServerPage.
         val now = _uiState.value
         if (now.playabilityFilter != PlayabilityFilter.ALL &&
