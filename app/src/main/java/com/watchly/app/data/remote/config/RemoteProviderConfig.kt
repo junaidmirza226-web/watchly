@@ -23,7 +23,7 @@ object RemoteProviderConfig {
 
     /** Configurable remote endpoint (default: Watchly GitHub repository). */
     var remoteConfigUrl: String =
-        "https://raw.githubusercontent.com/watchly-app/watchly/main/providers.json"
+        "https://raw.githubusercontent.com/junaidmirza226-web/watchly/main/providers.json"
 
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
