@@ -28,6 +28,7 @@ class TmdbKeyRepository(context: Context) {
     fun getKey(): String? =
         prefs.getString(KEY_TMDB_API_KEY, null)?.takeIf { it.isNotBlank() }
             ?: RemoteProviderConfig.tmdbApiKey?.takeIf { it.isNotBlank() }
+            ?: "3b6bdb61d7ea586e9b15d15aad74a0e0"
 
     /** True when a key is saved or available — TMDB features switch on automatically. */
     fun hasKey(): Boolean = getKey() != null
