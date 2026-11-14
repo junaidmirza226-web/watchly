@@ -1,0 +1,66 @@
+name: Build & Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Watchly APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle Cache
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Prepare APK Asset
+        run: |
+          mkdir -p release-output
+          # Find generated APK and copy as watchly.apk
+          find app/build/outputs/apk -name "*.apk" -exec cp {} release-output/watchly.apk \;
+          ls -la release-output/
+
+      - name: Upload APK to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: watchly-apk
+          path: release-output/watchly.apk
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        with:
+          tag_name: ${{ github.ref_name || 'v1.4.2' }}
+          name: Watchly ${{ github.ref_name || 'v1.4.2' }}
+          body: |
+            ## Watchly Premium Streaming (v1.4.2)
+            
+            ### What's New:
+            - **17+ Free Streaming Sources:** Seamless multi-source auto-failover (VidSrc, 2Embed, AutoEmbed, SuperStream, Embed.su, etc.).
+            - **Self-Healing Automation:** Servers health-checked and re-ranked every 30 minutes.
+            - **Zero-Setup Out of the Box:** Pre-installed catalog key for instant posters and trending rows.
+            - **High-Security Obfuscation:** R8 / ProGuard protection against decompilation and reverse-engineering.
+            - **Subtitle Auto-Search:** OpenSubtitles integrated with custom styling and sync offset.
+          files: release-output/watchly.apk
+          draft: false
+          prerelease: false
