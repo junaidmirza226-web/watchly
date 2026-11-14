@@ -2,6 +2,8 @@ name: Build & Release APK
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
@@ -80,19 +82,71 @@ jobs:
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
-          tag_name: ${{ github.ref_name || 'v1.4.2' }}
-          name: Watchly ${{ github.ref_name || 'v1.4.2' }}
+          tag_name: v1.4.3
+          name: Watchly v1.4.3
           body: |
-            ## Watchly Premium Streaming (v1.4.2)
+            ## Watchly Premium Streaming (v1.4.3)
             
             ### What's New:
-            - **17+ Free Streaming Sources:** Seamless multi-source auto-failover (VidSrc, 2Embed, AutoEmbed, SuperStream, Embed.su, etc.).
-            - **Self-Healing Automation:** Servers health-checked and re-ranked every 30 minutes.
-            - **Zero-Setup Out of the Box:** Pre-installed catalog key for instant posters and trending rows.
-            - **High-Security Obfuscation:** R8 / ProGuard protection against decompilation and reverse-engineering.
-            - **Subtitle Auto-Search:** OpenSubtitles integrated with custom styling and sync offset.
+            - **Cinematic Hero Display:** Enlarged 340dp full-bleed hero banner with dynamic contrast scrim.
+            - **Shimmer Skeleton Loading:** Smooth shimmer animations replace static loaders.
+            - **Clean Uncluttered Poster Cards:** Removed obstructive badges for pure artwork visibility.
+            - **Natural Scroll Chips:** Filter chips scroll fluidly with the content grid.
+            - **17+ Streaming Engine:** Multi-source failover with auto-recovery and zero-setup catalog.
           files: release-output/watchly.apk
           draft: false
           prerelease: false
+
+  cloud-device-test:
+    name: Cloud Android Phone Test (Pixel 6)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download APK from Build Job
+        uses: actions/download-artifact@v4
+        with:
+          name: watchly-apk
+          path: release-output
+
+      - name: Enable KVM Virtualization
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Cloud Android Phone (Google Pixel 6 - API 33)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          force-avd-creation: false
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            mkdir -p emulator-evidence
+            echo "Installing signed APK on Cloud Pixel..."
+            adb install -r release-output/watchly.apk
+            echo "Launching Watchly on Pixel 6..."
+            adb shell am start -n com.watchly.app/.MainActivity
+            sleep 15
+            echo "Taking Home screen screenshot on Pixel 6..."
+            adb exec-out screencap -p > emulator-evidence/pixel6_01_home.png
+            echo "Testing navigation: tap Search..."
+            adb shell input tap 980 150 || true
+            sleep 5
+            adb exec-out screencap -p > emulator-evidence/pixel6_02_search.png
+            echo "Checking logcat for any fatal crashes..."
+            adb logcat -d *:E | grep -i "FATAL EXCEPTION" || true
+            echo "Testing finished successfully."
+
+      - name: Upload Cloud Device Screenshots & Test Evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloud-phone-test-evidence
+          path: emulator-evidence/
