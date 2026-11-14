@@ -5,15 +5,36 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.lifecycle.lifecycleScope
+import com.watchly.app.data.settings.TmdbKeyRepository
 import com.watchly.app.ui.nav.WatchlyApp
 import com.watchly.app.ui.player.PipState
 import com.watchly.app.ui.player.enterWatchlyPip
 import com.watchly.app.ui.theme.WatchlyTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Ensure the built-in TMDB master key is seeded on first launch so all
+        // blockbusters, TV shows, and Bollywood/regional industries are ready out-of-the-box.
+        runCatching {
+            val tmdbRepo = TmdbKeyRepository(applicationContext)
+            if (!tmdbRepo.hasKey()) {
+                tmdbRepo.setKey(TmdbKeyRepository.DEFAULT_TMDB_API_KEY)
+            }
+        }
+
         enableEdgeToEdge()
+
+        // Check for updates automatically in the background
+        lifecycleScope.launch {
+            runCatching {
+                com.watchly.app.data.remote.AppUpdateChecker.checkForUpdates()
+            }
+        }
+
         setContent {
             WatchlyTheme {
                 WatchlyApp()
