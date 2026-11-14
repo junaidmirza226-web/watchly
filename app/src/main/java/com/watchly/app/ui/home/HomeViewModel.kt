@@ -215,20 +215,19 @@ class HomeViewModel(
             _uiState.update { it.copy(hasTmdbKey = hasKey) }
 
             // Fetch modern TMDB trending + top rated sources in parallel when key is available,
-            // with resilient fallback to Archive / TVmaze when keyless.
+            // with resilient fallback to Archive / TVmaze when keyless or if TMDB call fails.
             val moviesDeferred = async {
                 runCatching {
-                    if (apiKey != null) {
-                        TmdbApi.fetchTrendingMovies(apiKey)
-                    } else {
-                        ArchiveApi.fetchMoviesPage(page = 1, perPage = 20)
-                    }
+                    val tmdb = if (apiKey != null) {
+                        runCatching { TmdbApi.fetchTrendingMovies(apiKey) }.getOrNull()
+                    } else null
+                    if (!tmdb.isNullOrEmpty()) tmdb else ArchiveApi.fetchMoviesPage(page = 1, perPage = 20)
                 }
             }
             val topRatedMoviesDeferred = async {
                 runCatching {
                     if (apiKey != null) {
-                        TmdbApi.fetchTopRatedMovies(apiKey)
+                        runCatching { TmdbApi.fetchTopRatedMovies(apiKey) }.getOrDefault(emptyList())
                     } else {
                         emptyList()
                     }
@@ -236,17 +235,16 @@ class HomeViewModel(
             }
             val showsDeferred = async {
                 runCatching {
-                    if (apiKey != null) {
-                        TmdbApi.fetchTrendingTv(apiKey)
-                    } else {
-                        TvMazeApi.fetchTrendingShows()
-                    }
+                    val tmdb = if (apiKey != null) {
+                        runCatching { TmdbApi.fetchTrendingTv(apiKey) }.getOrNull()
+                    } else null
+                    if (!tmdb.isNullOrEmpty()) tmdb else TvMazeApi.fetchTrendingShows()
                 }
             }
             val topRatedShowsDeferred = async {
                 runCatching {
                     if (apiKey != null) {
-                        TmdbApi.fetchTopRatedTv(apiKey)
+                        runCatching { TmdbApi.fetchTopRatedTv(apiKey) }.getOrDefault(emptyList())
                     } else {
                         emptyList()
                     }
@@ -353,6 +351,7 @@ class HomeViewModel(
             // Industry rows need the user's TMDB key; without one they
             // stay hidden (no error, no empty shells). Each industry
             // fails independently — a failed one just doesn't appear.
+            _uiState.update { it.copy(hasTmdbKey = apiKey != null) }
             if (apiKey != null) {
                 val rows = INDUSTRIES.map { industry ->
                     async {
