@@ -36,6 +36,10 @@ object RemoteProviderConfig {
     @Volatile
     private var memoryCachedProviders: List<ProviderEntry>? = null
 
+    /** Dynamically updated TMDB API key from cloud config. */
+    @Volatile
+    var tmdbApiKey: String? = null
+
     /**
      * Bundled fallback provider list embedded directly in the app.
      * Guarantees Watchly can stream immediately without waiting for network.
@@ -132,7 +136,17 @@ object RemoteProviderConfig {
      */
     fun parseJson(jsonString: String): List<ProviderEntry> {
         return try {
-            val array = JSONArray(jsonString)
+            val trimmed = jsonString.trim()
+            val array = if (trimmed.startsWith("[")) {
+                JSONArray(trimmed)
+            } else {
+                val obj = org.json.JSONObject(trimmed)
+                val key = if (obj.has("tmdbKey")) obj.optString("tmdbKey") else obj.optString("tmdb_api_key")
+                if (!key.isNullOrBlank()) {
+                    tmdbApiKey = key
+                }
+                obj.optJSONArray("providers") ?: JSONArray()
+            }
             val list = mutableListOf<ProviderEntry>()
             for (i in 0 until array.length()) {
                 val obj = array.optJSONObject(i) ?: continue

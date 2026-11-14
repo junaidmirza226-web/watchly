@@ -343,19 +343,19 @@ def find_providers_json(custom_path: str = None) -> Path:
     return script_dir.parent / "providers.json"
 
 
-def load_providers(filepath: Path) -> list:
+def load_providers(filepath: Path) -> tuple[list, dict | None]:
     """Load existing providers list."""
     if filepath.exists():
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, list):
-                    return data
+                    return data, None
                 elif isinstance(data, dict) and "providers" in data:
-                    return data["providers"]
+                    return data["providers"], data
         except Exception as e:
             print(f"[WARN] Failed to load {filepath}: {e}")
-    return []
+    return [], None
 
 
 def test_candidate(candidate: dict, tmdb_id: int = 550, imdb_id: str = "tt0137523", timeout: float = 15.0) -> tuple[bool, float | None, str]:
@@ -469,7 +469,7 @@ def main():
     target_path = find_providers_json(args.file)
     print(f"[INFO] Using providers file: {target_path}")
 
-    current_providers = load_providers(target_path)
+    current_providers, original_wrapper = load_providers(target_path)
     print(f"[INFO] Current providers in config: {len(current_providers)}")
 
     # Deduplication map by domain and baseUrl
@@ -548,7 +548,14 @@ def main():
         updated_list = current_providers + discovered
         target_path.parent.mkdir(parents=True, exist_ok=True)
         with open(target_path, "w", encoding="utf-8") as f:
-            json.dump(updated_list, f, indent=2)
+            if original_wrapper is not None:
+                original_wrapper["providers"] = updated_list
+                json.dump(original_wrapper, f, indent=2)
+            else:
+                json.dump({
+                    "tmdbKey": "4f298a53e5522830c957e3bc1d007647",
+                    "providers": updated_list
+                }, f, indent=2)
         print(f"[SUCCESS] Saved updated registry with {len(updated_list)} total providers.")
 
     # Write Markdown summary report

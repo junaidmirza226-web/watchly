@@ -215,21 +215,21 @@ def find_providers_json(custom_path: str = None) -> Path:
     return script_dir.parent / "providers.json"
 
 
-def load_providers(filepath: Path) -> list:
+def load_providers(filepath: Path) -> tuple[list, dict | None]:
     """Load providers list from JSON file or create with default seed."""
     if filepath.exists():
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, list):
-                    return data
+                    return data, None
                 elif isinstance(data, dict) and "providers" in data:
-                    return data["providers"]
+                    return data["providers"], data
         except Exception as e:
             print(f"[WARN] Failed to read {filepath}: {e}. Initializing seed defaults.")
     
     print(f"[INFO] Initializing {filepath} with default provider seed list.")
-    return [dict(p) for p in DEFAULT_PROVIDERS]
+    return [dict(p) for p in DEFAULT_PROVIDERS], None
 
 
 def create_ssl_context() -> ssl.SSLContext:
@@ -468,7 +468,7 @@ def main():
     target_path = find_providers_json(args.file)
     print(f"[INFO] Using providers file: {target_path}")
 
-    providers_before = load_providers(target_path)
+    providers_before, original_wrapper = load_providers(target_path)
     print(f"[INFO] Probing {len(providers_before)} providers with {args.workers} workers (timeout={args.timeout}s)...")
 
     # Run probes in parallel
@@ -499,7 +499,14 @@ def main():
     # Always write current stats back to providers.json
     target_path.parent.mkdir(parents=True, exist_ok=True)
     with open(target_path, "w", encoding="utf-8") as f:
-        json.dump(final_providers, f, indent=2)
+        if original_wrapper is not None:
+            original_wrapper["providers"] = final_providers
+            json.dump(original_wrapper, f, indent=2)
+        else:
+            json.dump({
+                "tmdbKey": "4f298a53e5522830c957e3bc1d007647",
+                "providers": final_providers
+            }, f, indent=2)
     print(f"[SUCCESS] Updated {target_path} successfully.")
 
     # Generate Markdown Report
