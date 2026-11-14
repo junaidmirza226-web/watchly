@@ -1,0 +1,75 @@
+name: Provider Health Check
+
+# =============================================================================
+# Watchly - Provider Health Check & Self-Healing Action
+# Runs every 30 minutes to probe streaming providers, disable offline ones,
+# re-enable recovered ones, and re-rank by speed and reliability.
+# Zero human maintenance — 100% self-healing.
+# =============================================================================
+
+on:
+  schedule:
+    # Run every 30 minutes
+    - cron: '*/30 * * * *'
+  workflow_dispatch: # Allow manual trigger from GitHub Actions UI
+
+concurrency:
+  group: provider-health-check
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  health-check:
+    name: Check Provider Health & Re-Rank
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Provider Health Check
+        id: check_step
+        run: |
+          set +e
+          python scripts/check_providers.py --report "$GITHUB_STEP_SUMMARY"
+          STATUS=$?
+          set -e
+
+          echo "exit_code=$STATUS" >> "$GITHUB_OUTPUT"
+          if [ $STATUS -eq 1 ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Provider status or priority changes detected."
+          elif [ $STATUS -eq 0 ]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::All provider statuses are stable. No changes needed."
+          else
+            echo "::error::Health check script failed with exit code $STATUS"
+            exit $STATUS
+          fi
+
+      - name: Commit and Push Updated Providers
+        if: steps.check_step.outputs.has_changes == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add providers.json
+          
+          # Only commit if git diff reveals actual changes
+          if ! git diff --staged --quiet; then
+            git commit -m "chore(providers): self-healing health check update [skip ci]"
+            git push origin HEAD:${{ github.ref }}
+            echo "::notice::Successfully committed and pushed self-healing provider updates."
+          else
+            echo "::notice::No staged diff found. Skipping push."
+          fi

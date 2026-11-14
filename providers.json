@@ -1,0 +1,155 @@
+[
+  {
+    "name": "VidSrc.to",
+    "baseUrl": "https://vidsrc.to",
+    "enabled": true,
+    "priority": 1,
+    "type": "EMBED",
+    "requiresReferer": true,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  },
+  {
+    "name": "VidSrc.pro",
+    "baseUrl": "https://vidsrc.pro",
+    "enabled": true,
+    "priority": 2,
+    "type": "EMBED",
+    "requiresReferer": true,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  },
+  {
+    "name": "VidSrc.cc",
+    "baseUrl": "https://vidsrc.cc",
+    "enabled": true,
+    "priority": 3,
+    "type": "EMBED",
+    "requiresReferer": true,
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  },
+  {
+    "name": "Embed.su",
+    "baseUrl": "https://embed.su",
+    "enabled": true,
+    "priority": 4,
+    "type": "EMBED",
+    "requiresReferer": true,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  },
+  {
+    "name": "2Embed",
+    "baseUrl": "https://www.2embed.cc",
+    "enabled": true,
+    "priority": 5,
+    "type": "EMBED",
+    "requiresReferer": true,
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  },
+  {
+    "name": "AutoEmbed",
+    "baseUrl": "https://player.autoembed.cc",
+    "enabled": true,
+    "priority": 6,
+    "type": "EMBED",
+    "requiresReferer": false,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  },
+  {
+    "name": "VidLink",
+    "baseUrl": "https://vidlink.pro",
+    "enabled": true,
+    "priority": 7,
+    "type": "EMBED",
+    "requiresReferer": true,
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15"
+  },
+  {
+    "name": "MoviesAPI",
+    "baseUrl": "https://moviesapi.club",
+    "enabled": true,
+    "priority": 8,
+    "type": "EMBED",
+    "requiresReferer": true,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  },
+  {
+    "name": "SuperStream",
+    "baseUrl": "https://superstream.tech",
+    "enabled": true,
+    "priority": 9,
+    "type": "API",
+    "requiresReferer": false,
+    "userAgent": "WatchlyApp/1.4.2 (Android; Mobile)"
+  },
+  {
+    "name": "FlixHQ",
+    "baseUrl": "https://flixhq.to",
+    "enabled": true,
+    "priority": 10,
+    "type": "SCRAPER",
+    "requiresReferer": false,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  },
+  {
+    "name": "VidBinge",
+    "baseUrl": "https://vidbinge.com",
+    "enabled": true,
+    "priority": 11,
+    "type": "EMBED",
+    "requiresReferer": true,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  },
+  {
+    "name": "SmashyStream",
+    "baseUrl": "https://embed.smashystream.com",
+    "enabled": true,
+    "priority": 12,
+    "type": "EMBED",
+    "requiresReferer": true,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0"
+  },
+  {
+    "name": "RiveStream",
+    "baseUrl": "https://rivestream.live",
+    "enabled": true,
+    "priority": 13,
+    "type": "EMBED",
+    "requiresReferer": false,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  },
+  {
+    "name": "NontonGo",
+    "baseUrl": "https://www.nontongo.win",
+    "enabled": true,
+    "priority": 14,
+    "type": "EMBED",
+    "requiresReferer": false,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  },
+  {
+    "name": "MultiEmbed",
+    "baseUrl": "https://multiembed.mov",
+    "enabled": true,
+    "priority": 15,
+    "type": "EMBED",
+    "requiresReferer": true,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  },
+  {
+    "name": "VidCloud",
+    "baseUrl": "https://vidcloud9.com",
+    "enabled": true,
+    "priority": 16,
+    "type": "EMBED",
+    "requiresReferer": true,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  },
+  {
+    "name": "Autoembed",
+    "baseUrl": "https://autoembed.co",
+    "enabled": true,
+    "priority": 17,
+    "type": "EMBED",
+    "requiresReferer": false,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+  }
+]

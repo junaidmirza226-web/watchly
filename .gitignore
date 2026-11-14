@@ -1,0 +1,18 @@
+*.iml
+# Watchly signing material — NEVER commit. The real files live
+# OUTSIDE this repo at ../signing/ (workspace-persisted, cycle 7);
+# these patterns are a tripwire in case they are ever copied in.
+*.keystore
+*.jks
+signing.properties
+/signing/
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/app/build
+captures
+.externalNativeBuild
+.cxx
+.kotlin/

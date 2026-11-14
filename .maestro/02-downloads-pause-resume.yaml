@@ -1,0 +1,92 @@
+# Watchly journey 2: start a download, then pause + resume it
+# from the Library (the cycle-5 download engine's UI contract).
+#
+# The download itself depends on the live Archive catalogue, so
+# every download-specific step is guarded: the flow proves the
+# navigation and the Library sections unconditionally, and drives
+# pause/resume whenever a running download is actually present.
+appId: com.watchly.app
+---
+- launchApp
+# CI-emulator housekeeping: the 2-core SwiftShader emulator
+# regularly raises a system ANR dialog over the freshly launched
+# app ("System UI isn't responding" / "Process system isn't
+# responding" — same dialog, both with a "Close app" button).
+# When it's there, dismiss it with "Wait"; when it isn't, this
+# block is skipped entirely.
+- runFlow:
+    when:
+      visible: "Close app"
+    commands:
+      - tapOn: "Wait"
+# 60s (not 15s): the CI emulator is a 2-core SwiftShader device and
+# a cold start can take far longer than on a phone. The wait polls,
+# so it returns the moment the text appears — the ceiling only
+# matters when something is actually wrong.
+- extendedWaitUntil:
+    visible: "Watchly"
+    timeout: 60000
+- tapOn: "Search"
+- tapOn: "Movies, shows, anime…"
+- inputText: "Night of the Living Dead"
+- extendedWaitUntil:
+    visible: "Night of the Living Dead"
+    timeout: 30000
+# Index 1, deliberately: index 0 for this text is the SEARCH
+# FIELD itself (it contains the query we just typed), and
+# tapping it only focuses the field — the flow then waits
+# forever on a Details screen that never opens (proven by run
+# 42299404114's hierarchy: results visible, keyboard up).
+# Index 1 is the first result card's title.
+- tapOn:
+    text: "Night of the Living Dead"
+    index: 1
+- extendedWaitUntil:
+    visible: "Mark watched"
+    timeout: 30000
+# Start the download when the title offers one.
+- runFlow:
+    when:
+      visible: "Download"
+    commands:
+      - tapOn: "Download"
+      # Multiple qualities open the picker first; pick the top
+      # row when it appears (labels vary by file, position does
+      # not).
+      - runFlow:
+          when:
+            visible: "Choose quality"
+          commands:
+            - tapOn:
+                text: ".*"
+                index: 1
+      - waitForAnimationToEnd
+- pressKey: back
+# Library: Downloads section + the new engine's controls.
+- tapOn: "My Library"
+# Both sections sit deep in the Library's scrolling column —
+# scroll them into existence instead of asserting blind
+# (same evidence as flow 01).
+- scrollUntilVisible:
+    element: "Downloads"
+    direction: DOWN
+    timeout: 60000
+- scrollUntilVisible:
+    element: "On this device"
+    direction: DOWN
+    timeout: 60000
+# Cycle 10: the download-row buttons carry per-title labels for
+# TalkBack ("Pause download of <title>"), so these selectors use
+# the full label shape (Maestro text matching is a full regex).
+- runFlow:
+    when:
+      visible: "Pause download of .*"
+    commands:
+      - tapOn: "Pause download of .*"
+      - extendedWaitUntil:
+          visible: "Resume download of .*"
+          timeout: 10000
+      - tapOn: "Resume download of .*"
+      - extendedWaitUntil:
+          visible: "Pause download of .*"
+          timeout: 15000

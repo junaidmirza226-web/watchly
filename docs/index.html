@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Watchly — Premium Movie & TV Streaming for Android</title>
+  <meta name="description" content="Watchly is a premium, free movie and TV streaming app for Android. Stream any movie or show in 4K/1080p with zero ads, smart auto-healing servers, and multi-language subtitles.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0D0D0F;
+      --bg-card: #141418;
+      --bg-card-hover: #1C1C24;
+      --gold-primary: #E5B869;
+      --gold-light: #F3D498;
+      --gold-dark: #B88B3E;
+      --text-main: #FFFFFF;
+      --text-muted: #9E9EA8;
+      --text-sub: #6E6E78;
+      --border-gold: rgba(229, 184, 105, 0.2);
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    /* Header / Nav */
+    header {
+      padding: 24px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      position: sticky;
+      top: 0;
+      background: rgba(13, 13, 15, 0.85);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+    }
+    .nav-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .logo {
+      font-family: 'Cinzel', serif;
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--gold-primary);
+      text-decoration: none;
+      letter-spacing: 2px;
+    }
+    .btn-nav {
+      background: linear-gradient(135deg, var(--gold-primary), var(--gold-dark));
+      color: #0D0D0F;
+      font-weight: 600;
+      font-size: 14px;
+      padding: 10px 20px;
+      border-radius: 99px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+    .btn-nav:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(229, 184, 105, 0.35);
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 100px 0 80px;
+      text-align: center;
+      position: relative;
+    }
+    .hero::before {
+      content: "";
+      position: absolute;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 500px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(229, 184, 105, 0.12) 0%, transparent 70%);
+      z-index: -1;
+      filter: blur(40px);
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 16px;
+      background: rgba(229, 184, 105, 0.1);
+      border: 1px solid var(--border-gold);
+      border-radius: 99px;
+      color: var(--gold-light);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-family: 'Cinzel', serif;
+      font-size: clamp(38px, 6vw, 64px);
+      line-height: 1.15;
+      font-weight: 800;
+      letter-spacing: 1px;
+      margin-bottom: 20px;
+      background: linear-gradient(180deg, #FFFFFF 0%, #D4A347 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      font-size: clamp(16px, 2.5vw, 20px);
+      color: var(--text-muted);
+      max-width: 650px;
+      margin: 0 auto 40px;
+    }
+    .cta-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .btn-download-hero {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: linear-gradient(135deg, var(--gold-primary), var(--gold-dark));
+      color: #0D0D0F;
+      font-size: 18px;
+      font-weight: 700;
+      padding: 18px 42px;
+      border-radius: 99px;
+      text-decoration: none;
+      box-shadow: 0 8px 30px rgba(229, 184, 105, 0.3);
+      transition: all 0.25s ease;
+    }
+    .btn-download-hero:hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 12px 40px rgba(229, 184, 105, 0.5);
+    }
+    .btn-download-hero svg {
+      width: 24px;
+      height: 24px;
+    }
+    .version-meta {
+      font-size: 13px;
+      color: var(--text-sub);
+    }
+
+    /* Features Grid */
+    .features {
+      padding: 80px 0;
+    }
+    .section-title {
+      font-family: 'Cinzel', serif;
+      font-size: 32px;
+      text-align: center;
+      color: var(--gold-primary);
+      margin-bottom: 48px;
+      letter-spacing: 1px;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      padding: 32px;
+      border-radius: 20px;
+      transition: all 0.3s ease;
+    }
+    .feature-card:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-gold);
+      transform: translateY(-4px);
+    }
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      background: rgba(229, 184, 105, 0.1);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      color: var(--gold-primary);
+      font-size: 22px;
+    }
+    .feature-card h3 {
+      font-size: 20px;
+      margin-bottom: 12px;
+      color: var(--text-main);
+    }
+    .feature-card p {
+      font-size: 15px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* Steps Section */
+    .steps {
+      padding: 80px 0;
+      background: rgba(20, 20, 24, 0.5);
+      border-radius: 28px;
+      margin: 40px 0;
+    }
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 32px;
+      padding: 0 24px;
+    }
+    .step-item {
+      text-align: center;
+    }
+    .step-number {
+      width: 52px;
+      height: 52px;
+      background: var(--gold-primary);
+      color: #0D0D0F;
+      font-weight: 800;
+      font-size: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+    }
+    .step-item h4 {
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+    .step-item p {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* FAQ */
+    .faq {
+      padding: 80px 0;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .faq-item {
+      background: var(--bg-card);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    .faq-item h4 {
+      font-size: 17px;
+      color: var(--gold-light);
+      margin-bottom: 8px;
+    }
+    .faq-item p {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* Footer */
+    footer {
+      padding: 40px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-sub);
+    }
+    footer a {
+      color: var(--gold-primary);
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <header>
+    <div class="container nav-content">
+      <a href="#" class="logo">WATCHLY</a>
+      <a href="https://github.com/junaidmirza226-web/watchly/releases/latest/download/watchly.apk" class="btn-nav">Download APK</a>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <main>
+    <section class="hero container">
+      <div class="badge">✨ 100% Free · No Ads · 17+ Streaming Sources</div>
+      <h1>Every Movie & Series.<br>Streamed In Seconds.</h1>
+      <p>Watchly connects to the world's best free streaming servers in real-time. Instant playback, smart auto-failover, and cinema-grade quality on your Android phone or TV.</p>
+      
+      <div class="cta-group">
+        <a href="https://github.com/junaidmirza226-web/watchly/releases/latest/download/watchly.apk" class="btn-download-hero">
+          <svg fill="currentColor" viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/></svg>
+          Download Watchly for Android
+        </a>
+        <div class="version-meta">Version 1.4.2 · Android 8.0+ · Clean & Safe APK</div>
+      </div>
+    </section>
+
+    <!-- Key Features -->
+    <section class="features container">
+      <h2 class="section-title">Engineered for Perfection</h2>
+      <div class="features-grid">
+        
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>17+ Auto-Switching Sources</h3>
+          <p>Powered by VidSrc, 2Embed, SuperStream, and more. When one stream buffers or drops, Watchly instantly switches to backup sources without stopping playback.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🤖</div>
+          <h3>Self-Healing System</h3>
+          <p>Our automated robots health-check and re-rank every server every 30 minutes. Broken links are auto-disabled, and fresh links load automatically without app updates.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🛡️</div>
+          <h3>Zero Ads & Total Privacy</h3>
+          <p>Enjoy clean, ad-free streaming. No popup tabs, no invasive trackers, and no subscription fees. Just pure entertainment.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">💬</div>
+          <h3>Multi-Language Subtitles</h3>
+          <p>Automatic subtitle search powered by OpenSubtitles in over 40 languages, with adjustable timing sync and custom font sizing.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📥</div>
+          <h3>Offline Downloads</h3>
+          <p>High-speed segmented downloader lets you save your favorite movies and shows to watch on flights or without internet connection.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">✨</div>
+          <h3>Netflix-Grade Player</h3>
+          <p>Full swipe gestures for brightness & volume, double-tap seek, picture-in-picture (PiP), playback speed control, and background audio.</p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 3-Step Install Guide -->
+    <section class="container">
+      <div class="steps">
+        <h2 class="section-title">Get Started in 30 Seconds</h2>
+        <div class="steps-grid">
+          
+          <div class="step-item">
+            <div class="step-number">1</div>
+            <h4>Download APK</h4>
+            <p>Tap the download button above to get the latest Watchly APK directly to your phone.</p>
+          </div>
+
+          <div class="step-item">
+            <div class="step-number">2</div>
+            <h4>Install</h4>
+            <p>Tap the downloaded notification. If prompted, allow "Install from this source".</p>
+          </div>
+
+          <div class="step-item">
+            <div class="step-number">3</div>
+            <h4>Start Watching</h4>
+            <p>Open Watchly, pick any movie or TV series, and enjoy instant 4K playback!</p>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="faq container">
+      <h2 class="section-title">Frequently Asked Questions</h2>
+      
+      <div class="faq-item">
+        <h4>Is Watchly completely free?</h4>
+        <p>Yes, 100% free with zero monthly charges, subscriptions, or hidden in-app purchases.</p>
+      </div>
+
+      <div class="faq-item">
+        <h4>Do I have to update the app every time a link changes?</h4>
+        <p>No! Watchly connects to our cloud blueprint. Broken links are fixed automatically in the background without needing a new app download.</p>
+      </div>
+
+      <div class="faq-item">
+        <h4>Can I use it on Android TV or Firestick?</h4>
+        <p>Yes. Any Android device running Android 8.0 or higher is fully supported.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 Watchly. Built for true cinema lovers.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

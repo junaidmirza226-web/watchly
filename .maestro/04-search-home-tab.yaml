@@ -1,0 +1,66 @@
+# Watchly journey 4 (cycle 7, Phase A investigation):
+# Search -> results -> Details -> back -> HOME TAB TAP from the
+# search results screen.
+#
+# This is the exact ending that failed once in CI run
+# 42306084287 (cycle 6): the bottom-bar "Home" tap was issued
+# from Search results, Maestro reported the tap complete, but
+# the tab never switched within 30 s — flow 01 was re-ended with
+# a deterministic relaunch instead of isolating the cause.
+#
+# Suspected mechanism (code inspection, cycle 7): the app
+# consumes NO IME insets anywhere (edge-to-edge MainActivity,
+# no imePadding), so while the Search field is focused the
+# software keyboard window sits ON TOP of the bottom navigation
+# bar. A physical-coordinate tap on the "Home" item then lands
+# on the keyboard window and is consumed there — the app never
+# receives it. Returning from Details restores focus to the
+# search field, which raises the keyboard again at exactly the
+# moment this flow taps Home.
+#
+# The screenshot step right before the tab tap captures the
+# keyboard state as evidence (see the flow's debug output in
+# the maestro-journey-reports artifact).
+#
+# Selectors follow flow 01's proven shapes (exact-ellipsis
+# search hint, result at index 1 — index 0 is the field itself).
+appId: com.watchly.app
+---
+- launchApp
+# Same CI-emulator ANR housekeeping as flows 01-03.
+- runFlow:
+    when:
+      visible: "Close app"
+    commands:
+      - tapOn: "Wait"
+- extendedWaitUntil:
+    visible: "Watchly"
+    timeout: 60000
+- tapOn: "Search"
+- tapOn: "Movies, shows, anime…"
+- inputText: "Night of the Living Dead"
+- extendedWaitUntil:
+    visible: "Night of the Living Dead"
+    timeout: 30000
+# Index 1 = first result card (index 0 is the search field).
+- tapOn:
+    text: "Night of the Living Dead"
+    index: 1
+- extendedWaitUntil:
+    visible: "Mark watched"
+    timeout: 30000
+# Back to the search results. Focus returns to the search
+# field and the keyboard comes back up with it.
+- pressKey: back
+- extendedWaitUntil:
+    visible: "Night of the Living Dead"
+    timeout: 30000
+# Evidence frame: is the keyboard covering the bottom bar at
+# the moment of the tap?
+- takeScreenshot: 04-before-home-tap
+# THE TAP UNDER INVESTIGATION (run 42306084287: issued from
+# exactly this state, tab did not switch within 30 s).
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Watchly"
+    timeout: 30000

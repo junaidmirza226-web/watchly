@@ -1,0 +1,50 @@
+# Watchly journey 3: create a list from the Library and open it.
+# Fully offline — lists live on the device, so nothing here
+# depends on any API.
+appId: com.watchly.app
+---
+- launchApp
+# CI-emulator housekeeping: the 2-core SwiftShader emulator
+# regularly raises a system ANR dialog over the freshly launched
+# app ("System UI isn't responding" / "Process system isn't
+# responding" — same dialog, both with a "Close app" button).
+# When it's there, dismiss it with "Wait"; when it isn't, this
+# block is skipped entirely.
+- runFlow:
+    when:
+      visible: "Close app"
+    commands:
+      - tapOn: "Wait"
+# 60s (not 15s): the CI emulator is a 2-core SwiftShader device and
+# a cold start can take far longer than on a phone. The wait polls,
+# so it returns the moment the text appears — the ceiling only
+# matters when something is actually wrong.
+- extendedWaitUntil:
+    visible: "Watchly"
+    timeout: 60000
+- tapOn: "My Library"
+# "My Lists" is a deep Library section — below the fold (and not
+# composed) until scrolled to on the emulator's viewport.
+- scrollUntilVisible:
+    element: "My Lists"
+    direction: DOWN
+    timeout: 60000
+- tapOn: "See all"
+- extendedWaitUntil:
+    visible: "New list"
+    timeout: 10000
+- tapOn: "New list"
+- tapOn: "List name"
+- inputText: "Movie Night"
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "Movie Night"
+    timeout: 10000
+- tapOn: "Movie Night"
+# The empty-state element's text is the whole sentence ("This
+# list is empty. Add titles with ..."), and Maestro matching is
+# full-match — a bare "This list is empty." can never match it.
+- extendedWaitUntil:
+    visible: "This list is empty.*"
+    timeout: 10000
+- pressKey: back

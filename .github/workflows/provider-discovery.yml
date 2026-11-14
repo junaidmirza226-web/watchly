@@ -1,0 +1,74 @@
+name: Provider Discovery
+
+# =============================================================================
+# Watchly - Automated Provider Discovery Engine
+# Runs weekly to probe candidate embed streaming providers against a live TMDB title.
+# Automatically registers new functional providers into providers.json with
+# lower priority for subsequent self-healing promotion.
+# =============================================================================
+
+on:
+  schedule:
+    # Run weekly every Sunday at 03:00 UTC
+    - cron: '0 3 * * 0'
+  workflow_dispatch: # Allow manual trigger from GitHub Actions UI
+
+concurrency:
+  group: provider-discovery
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  discover:
+    name: Discover New Embed Providers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Provider Discovery Script
+        id: discovery_step
+        run: |
+          set +e
+          python scripts/discover_providers.py --report "$GITHUB_STEP_SUMMARY"
+          STATUS=$?
+          set -e
+
+          echo "exit_code=$STATUS" >> "$GITHUB_OUTPUT"
+          if [ $STATUS -eq 1 ]; then
+            echo "new_providers_found=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::New streaming providers were discovered and added."
+          elif [ $STATUS -eq 0 ]; then
+            echo "new_providers_found=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No new providers discovered this cycle."
+          else
+            echo "::error::Discovery script encountered an error (exit code $STATUS)"
+            exit $STATUS
+          fi
+
+      - name: Commit and Push Discovered Providers
+        if: steps.discovery_step.outputs.new_providers_found == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add providers.json
+
+          if ! git diff --staged --quiet; then
+            git commit -m "feat(providers): automated weekly discovery of new embed providers [skip ci]"
+            git push origin HEAD:${{ github.ref }}
+            echo "::notice::Successfully committed and pushed newly discovered providers."
+          else
+            echo "::notice::No staged diff found. Skipping push."
+          fi

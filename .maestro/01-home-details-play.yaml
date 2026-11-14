@@ -1,0 +1,92 @@
+# Watchly journey 1: Home -> Search -> Details -> play attempt.
+#
+# Selectors are stable UI chrome only (tab labels, headings,
+# button texts). Title names come from live APIs and are never
+# asserted — the one title tapped is the exact text this flow
+# typed into Search itself.
+appId: com.watchly.app
+---
+- launchApp
+# CI-emulator housekeeping: the 2-core SwiftShader emulator
+# regularly raises a system ANR dialog over the freshly launched
+# app ("System UI isn't responding" / "Process system isn't
+# responding" — same dialog, both with a "Close app" button).
+# When it's there, dismiss it with "Wait"; when it isn't, this
+# block is skipped entirely.
+- runFlow:
+    when:
+      visible: "Close app"
+    commands:
+      - tapOn: "Wait"
+# 60s (not 15s): the CI emulator is a 2-core SwiftShader device and
+# a cold start can take far longer than on a phone. The wait polls,
+# so it returns the moment the text appears — the ceiling only
+# matters when something is actually wrong.
+- extendedWaitUntil:
+    visible: "Watchly"
+    timeout: 60000
+# Bottom-nav round trip proves the tab chrome is alive.
+- tapOn: "My Library"
+# Downloads is a deep Library section: on the emulator's small
+# viewport it is below the fold and not even composed until
+# scrolled to (CI run 42290973402's hierarchy proves the Library
+# opens on its top cards). Scroll until it exists.
+- scrollUntilVisible:
+    element: "Downloads"
+    direction: DOWN
+    timeout: 60000
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Watchly"
+    timeout: 10000
+# NOTE on the search-field selector below: the hint ends in
+# ONE Unicode ellipsis character and Maestro text matching is
+# a FULL regex match — "anime..." (three dots) and the bare
+# prefix both provably never match it (CI runs
+# 42290973402/42295191307). The selector uses the exact text.
+# Into Search via its labelled icon, then a known public-domain
+# film (Internet Archive) so Details has a real Play button.
+- tapOn: "Search"
+- tapOn: "Movies, shows, anime…"
+- inputText: "Night of the Living Dead"
+- extendedWaitUntil:
+    visible: "Night of the Living Dead"
+    timeout: 30000
+# Index 1, deliberately: index 0 for this text is the SEARCH
+# FIELD itself (it contains the query we just typed), and
+# tapping it only focuses the field — the flow then waits
+# forever on a Details screen that never opens (proven by run
+# 42299404114's hierarchy: results visible, keyboard up).
+# Index 1 is the first result card's title.
+- tapOn:
+    text: "Night of the Living Dead"
+    index: 1
+# Details chrome exists for every title, playable or not.
+- extendedWaitUntil:
+    visible: "Mark watched"
+    timeout: 30000
+- assertVisible: "Share"
+# Play attempt: only when this title actually offers Play.
+- runFlow:
+    when:
+      visible: "Play"
+    commands:
+      - tapOn: "Play"
+      - waitForAnimationToEnd
+      # The player (or the official YouTube layout) is up; the
+      # system back returns to Details either way.
+      - pressKey: back
+- pressKey: back
+# Ending note (runs 42303386083 + 42306084287): we arrived at
+# Details FROM SEARCH, so the backs land on the search results,
+# and a Home-tab tap from there did not switch tabs within the
+# wait in run 42306084287 (final hierarchy still showed Search;
+# cause not isolated — possibly an app nav quirk worth its own
+# look, flagged in progress-report-13). The journey's purpose
+# is already proven by then, so end deterministically: relaunch
+# to a cold start, which always lands on Home.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Watchly"
+    timeout: 60000

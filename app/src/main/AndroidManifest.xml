@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Cycle 5: the download worker runs as a foreground service. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Cycle 9: the player's media notification (play/pause/next).
+         Declared only — no runtime prompt is raised in the player
+         (see PlayerMediaSession.kt for why). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:name=".WatchlyApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="Watchly"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Watchly">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:supportsPictureInPicture="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
+            android:theme="@style/Theme.Watchly">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Cycle 9: the PiP window's play/pause button and the
+             media notification's buttons broadcast to these; both
+             forward into the live player. Not exported — only
+             Watchly's own PendingIntents may reach them. -->
+        <receiver
+            android:name=".ui.player.PipActionReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".data.playback.MediaControlsReceiver"
+            android:exported="false" />
+
+        <!-- Cycle 5: WorkManager's foreground service carries the
+             download worker's progress notification. The dataSync
+             type must be declared here (merging over the library's
+             own declaration) or Android 14+ refuses the promotion
+             — and lint fails the build for the omission. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+    </application>
+
+</manifest>
