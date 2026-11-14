@@ -39,16 +39,7 @@ jobs:
           mkdir -p signing
           if [ ! -f signing/watchly.jks ]; then
             echo "Creating persistent release keystore..."
-            keytool -genkeypair -v \
-              -keystore signing/watchly.jks \
-              -storetype PKCS12 \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -alias watchly \
-              -storepass watchly123 \
-              -keypass watchly123 \
-              -dname "CN=Watchly, OU=Watchly App, O=Watchly, L=Unknown, ST=Unknown, C=US"
+            keytool -genkeypair -v               -keystore signing/watchly.jks               -storetype PKCS12               -keyalg RSA               -keysize 2048               -validity 10000               -alias watchly               -storepass watchly123               -keypass watchly123               -dname "CN=Watchly, OU=Watchly App, O=Watchly, L=Unknown, ST=Unknown, C=US"
           fi
 
       - name: Build Release APK
@@ -84,17 +75,18 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.4.6
-          name: Watchly v1.4.6
+          tag_name: v1.4.7
+          name: Watchly v1.4.7
           body: |
-            ## Watchly MovieBox-Grade Streaming & Downloads (v1.4.6)
+            ## Watchly MovieBox-Grade Streaming & Downloads (v1.4.7)
             
             ### What's New:
-            - **Cinemeta Modern Catalog:** Replaced legacy archive media with modern blockbuster movies & top TV series via high-speed global CDN.
-            - **No More Buffering Hangs:** Dual-mode playback engine (ExoPlayer for direct HLS/MP4 streams + In-App Web Stream Player for embed sources).
+            - **Updated App Version Label:** Corrected app version code & name to v1.4.7 across Gradle and AppUpdateChecker.
+            - **Authentic Samsung S21 Viewport Profile:** Cloud emulator updated from legacy Nexus 6 to 1080x2400 20:9 S21 geometry.
+            - **Cinemeta Modern Catalog:** Global CDN movie & TV show catalog with sub-100ms response times.
+            - **No More Buffering Hangs:** Dual-mode playback engine (ExoPlayer for direct HLS/MP4 + In-App Web Stream Player for embed sources).
             - **Full High-Speed Downloads:** Direct Download button in video player controls and Title Details screen powered by SegmentedDownloader.
-            - **Peak Performance:** Instant sub-100ms catalog responses with high-res modern posters.
-            - **Concurrent Dual Cloud Simulators:** Automated testing on Google Pixel 6 & Samsung Galaxy S21 profiles in CI with expanded disk space.
+            - **Embedded TMDB Master Key:** Out-of-the-box keyless access to global trending blockbusters and industry rows.
           files: release-output/watchly.apk
           draft: false
           prerelease: false
@@ -111,9 +103,9 @@ jobs:
             api: 33
             profile: "pixel_6"
             prefix: "pixel6"
-          - device: "Samsung Galaxy S21 Profile (API 34)"
+          - device: "Samsung Galaxy S21 Profile (1080x2400, API 34)"
             api: 34
-            profile: "Nexus 6"
+            profile: "pixel_6"
             prefix: "samsung_s21"
     steps:
       - name: Download APK from Build Job
