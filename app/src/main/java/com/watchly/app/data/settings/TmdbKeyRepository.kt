@@ -28,7 +28,6 @@ class TmdbKeyRepository(context: Context) {
     fun getKey(): String? =
         prefs.getString(KEY_TMDB_API_KEY, null)?.takeIf { it.isNotBlank() }
             ?: RemoteProviderConfig.tmdbApiKey?.takeIf { it.isNotBlank() }
-            ?: DEFAULT_BUILTIN_KEY
 
     /** True when a key is saved or available — TMDB features switch on automatically. */
     fun hasKey(): Boolean = getKey() != null
@@ -51,8 +50,5 @@ class TmdbKeyRepository(context: Context) {
     companion object {
         const val PREFS_NAME = "watchly_settings"
         const val KEY_TMDB_API_KEY = "tmdb_api_key"
-
-        // Built-in zero-setup public key: powers instant out-of-the-box catalog for everyone
-        private const val DEFAULT_BUILTIN_KEY = "4f298a53e5522830c957e3bc1d007647"
     }
 }
