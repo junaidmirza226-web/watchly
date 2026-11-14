@@ -66,7 +66,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.watchly.app.data.model.Title
 import com.watchly.app.data.search.SearchHistoryRepository
 import com.watchly.app.data.settings.TmdbKeyRepository
-import com.watchly.app.ui.components.PlayabilityFilterBar
 import com.watchly.app.ui.components.PosterCard
 import com.watchly.app.ui.theme.WatchlyGold
 import com.watchly.app.ui.theme.WatchlyGoldLight
