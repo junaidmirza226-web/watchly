@@ -84,25 +84,36 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.4.3
-          name: Watchly v1.4.3
+          tag_name: v1.4.4
+          name: Watchly v1.4.4
           body: |
-            ## Watchly Premium Streaming (v1.4.3)
+            ## Watchly Premium Streaming (v1.4.4)
             
             ### What's New:
-            - **Cinematic Hero Display:** Enlarged 340dp full-bleed hero banner with dynamic contrast scrim.
-            - **Shimmer Skeleton Loading:** Smooth shimmer animations replace static loaders.
-            - **Clean Uncluttered Poster Cards:** Removed obstructive badges for pure artwork visibility.
-            - **Natural Scroll Chips:** Filter chips scroll fluidly with the content grid.
-            - **17+ Streaming Engine:** Multi-source failover with auto-recovery and zero-setup catalog.
+            - **End-to-End One-Click Streaming:** Play button on all movies & TV episodes now directly triggers the 17-source multi-provider streaming aggregator.
+            - **TV Episode Direct Stream:** Tapping any TV season episode seamlessly requests live streams for that exact Season and Episode.
+            - **Clean Details Header:** Completely removed catalog-only restrictions and badges for an uncluttered MovieBox experience.
+            - **Dual Cloud Phone Testing:** Verified simultaneously on Google Pixel 6 and Samsung Galaxy profiles in GitHub Actions.
           files: release-output/watchly.apk
           draft: false
           prerelease: false
 
   cloud-device-test:
-    name: Cloud Android Phone Test (Pixel 6)
+    name: Cloud Android Test (${{ matrix.device }})
     needs: build
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device: "Google Pixel 6 (API 33)"
+            api: 33
+            profile: "pixel_6"
+            prefix: "pixel6"
+          - device: "Samsung Galaxy S21 Profile (API 34)"
+            api: 34
+            profile: "Nexus 6"
+            prefix: "samsung_s21"
     steps:
       - name: Download APK from Build Job
         uses: actions/download-artifact@v4
@@ -117,36 +128,36 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run Cloud Android Phone (Google Pixel 6 - API 33)
+      - name: Run Cloud Simulator (${{ matrix.device }})
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 33
+          api-level: ${{ matrix.api }}
           target: google_apis
           arch: x86_64
-          profile: pixel_6
+          profile: ${{ matrix.profile }}
           force-avd-creation: false
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
             mkdir -p emulator-evidence
-            echo "Installing signed APK on Cloud Pixel..."
+            echo "Installing signed APK on ${{ matrix.device }}..."
             adb install -r release-output/watchly.apk
-            echo "Launching Watchly on Pixel 6..."
+            echo "Launching Watchly on ${{ matrix.device }}..."
             adb shell am start -n com.watchly.app/.MainActivity
             sleep 15
-            echo "Taking Home screen screenshot on Pixel 6..."
-            adb exec-out screencap -p > emulator-evidence/pixel6_01_home.png
+            echo "Taking Home screen screenshot on ${{ matrix.device }}..."
+            adb exec-out screencap -p > emulator-evidence/${{ matrix.prefix }}_01_home.png
             echo "Testing navigation: tap Search..."
             adb shell input tap 980 150 || true
             sleep 5
-            adb exec-out screencap -p > emulator-evidence/pixel6_02_search.png
+            adb exec-out screencap -p > emulator-evidence/${{ matrix.prefix }}_02_search.png
             echo "Checking logcat for any fatal crashes..."
             adb logcat -d *:E | grep -i "FATAL EXCEPTION" || true
-            echo "Testing finished successfully."
+            echo "Testing finished successfully on ${{ matrix.device }}."
 
       - name: Upload Cloud Device Screenshots & Test Evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: cloud-phone-test-evidence
+          name: cloud-evidence-${{ matrix.prefix }}
           path: emulator-evidence/
