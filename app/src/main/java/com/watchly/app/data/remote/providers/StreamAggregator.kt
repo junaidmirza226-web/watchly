@@ -66,7 +66,7 @@ object StreamAggregator {
                     put("Referer", entry.baseUrl)
                     put("Origin", entry.baseUrl)
                 }
-                put("User-Agent", entry.userAgent.ifBlank { StreamProviderHelper.nextUserAgent() })
+                put("User-Agent", entry.userAgent?.takeIf { it.isNotBlank() } ?: StreamProviderHelper.nextUserAgent())
             }
             sources.add(
                 StreamSource(

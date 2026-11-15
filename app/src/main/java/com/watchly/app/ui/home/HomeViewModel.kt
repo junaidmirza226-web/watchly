@@ -133,7 +133,7 @@ class HomeViewModel(
         HomeUiState(
             playabilityFilter = uiPrefs?.playabilityFilter()
                 ?: PlayabilityFilter.ALL,
-            continueWatching = playback?.getContinueWatching().orEmpty()
+            continueWatching = playback?.getRecentProgress().orEmpty()
         )
     )
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -149,7 +149,7 @@ class HomeViewModel(
     }
 
     fun refreshContinueWatching() {
-        val cw = playback?.getContinueWatching().orEmpty()
+        val cw = playback?.getRecentProgress().orEmpty()
         if (cw != _uiState.value.continueWatching) {
             _uiState.update { it.copy(continueWatching = cw) }
         }
@@ -184,7 +184,7 @@ class HomeViewModel(
                 isLoading = true,
                 errorMessage = null,
                 failedSections = emptySet(),
-                continueWatching = playback?.getContinueWatching().orEmpty()
+                continueWatching = playback?.getRecentProgress().orEmpty()
             )
         }
         viewModelScope.launch {
