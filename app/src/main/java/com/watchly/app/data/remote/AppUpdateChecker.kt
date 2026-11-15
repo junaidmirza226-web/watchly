@@ -1,5 +1,6 @@
 package com.watchly.app.data.remote
 
+import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,14 +45,15 @@ object AppUpdateChecker {
      * If newer, updates [updateState] and returns the [AppUpdateInfo].
      */
     suspend fun checkForUpdates(
-        currentVersion: String = getCurrentVersion(),
+        context: Context,
         apiUrl: String = GITHUB_RELEASES_API_URL
     ): AppUpdateInfo? = withContext(Dispatchers.IO) {
+        val installedVersion = currentVersion(context) ?: return@withContext null
         try {
             val request = Request.Builder()
                 .url(apiUrl)
                 .header("Accept", "application/vnd.github.v3+json")
-                .header("User-Agent", "WatchlyApp/$currentVersion (Android)")
+                .header("User-Agent", "WatchlyApp/$installedVersion (Android)")
                 .build()
 
             httpClient.newCall(request).execute().use { response ->
@@ -62,7 +64,7 @@ object AppUpdateChecker {
                 val tagName = json.optString("tag_name", "").removePrefix("v").trim()
                 if (tagName.isBlank()) return@withContext null
 
-                if (isNewerVersion(current = currentVersion, remote = tagName)) {
+                if (isNewerVersion(current = installedVersion, remote = tagName)) {
                     val name = json.optString("name", "Version $tagName")
                     val bodyNotes = json.optString("body", "")
                     val htmlUrl = json.optString("html_url", "")
@@ -82,7 +84,7 @@ object AppUpdateChecker {
                     }
 
                     val info = AppUpdateInfo(
-                        currentVersion = currentVersion,
+                        currentVersion = installedVersion,
                         latestVersion = tagName,
                         releaseNotes = bodyNotes.ifBlank { null },
                         downloadUrl = downloadUrl,
@@ -97,6 +99,19 @@ object AppUpdateChecker {
         }
         null
     }
+
+    /**
+     * The version of the installed app, read from Android itself.
+     *
+     * This deliberately does NOT read BuildConfig: release builds run R8 with
+     * `-repackageclasses`, which moves the BuildConfig class to another package,
+     * so any reference to it either fails to compile or throws at runtime.
+     * PackageManager always reports the version that was really installed.
+     */
+    fun currentVersion(context: Context): String? = runCatching {
+        @Suppress("DEPRECATION")
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName
+    }.getOrNull()?.takeIf { it.isNotBlank() }
 
     /**
      * Compares semantic versions (e.g. "1.4.2" vs "1.5.0" or "1.4.10").
@@ -123,16 +138,6 @@ object AppUpdateChecker {
                 addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
-        }
-    }
-
-    const val CURRENT_VERSION_NAME = "1.5.0"
-
-    private fun getCurrentVersion(): String {
-        return try {
-            com.watchly.app.BuildConfig.VERSION_NAME
-        } catch (_: Throwable) {
-            CURRENT_VERSION_NAME
         }
     }
 }

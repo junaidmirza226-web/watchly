@@ -46,8 +46,8 @@ android {
         // v1.2.0 (cycle 10): backup/export, Data Saver, details depth — 120.
         // v1.3.0 (cycle 11): person pages (§3.3) — 130.
         // v1.4.0 (cycle 12): profiles (§8) — 140.
-        versionCode = 150
-        versionName = "1.5.0"
+        versionCode = 151
+        versionName = "1.5.1"
         // Instrumented tests (app/src/androidTest) run under the
         // standard AndroidX runner on the CI emulator.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -69,11 +69,17 @@ android {
                 keyPassword = watchlySigningProps.getProperty("keyPassword")
             }
         } else if (internalKeystore.exists()) {
+            // CI restores the one permanent release keystore from the repo
+            // secrets into signing/watchly.jks. The credentials come from the
+            // RELEASE_KEYSTORE_* environment variables so the key and its
+            // password never live in git.
+            val ksPassword = System.getenv("RELEASE_KEYSTORE_PASSWORD") ?: "watchly123"
+            val ksAlias = System.getenv("RELEASE_KEYSTORE_ALIAS") ?: "watchly"
             create("watchly") {
                 storeFile = internalKeystore
-                storePassword = "watchly123"
-                keyAlias = "watchly"
-                keyPassword = "watchly123"
+                storePassword = ksPassword
+                keyAlias = ksAlias
+                keyPassword = ksPassword
                 enableV1Signing = true
                 enableV2Signing = true
                 enableV3Signing = true

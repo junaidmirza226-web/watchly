@@ -48,7 +48,7 @@ class MainActivity : ComponentActivity() {
         // Check for updates automatically in the background
         lifecycleScope.launch {
             runCatching {
-                com.watchly.app.data.remote.AppUpdateChecker.checkForUpdates()
+                com.watchly.app.data.remote.AppUpdateChecker.checkForUpdates(applicationContext)
             }
         }
 

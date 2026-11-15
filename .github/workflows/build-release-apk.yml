@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m"
+      RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+      RELEASE_KEYSTORE_ALIAS: ${{ secrets.RELEASE_KEYSTORE_ALIAS }}
 
     steps:
       - name: Checkout Repository
@@ -34,22 +36,24 @@ jobs:
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
-      - name: Ensure Release Keystore
+      - name: Restore Release Keystore
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
         run: |
-          mkdir -p signing
-          if [ ! -f signing/watchly.jks ]; then
-            echo "Creating persistent release keystore..."
-            keytool -genkeypair -v \
-              -keystore signing/watchly.jks \
-              -storetype PKCS12 \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -alias watchly \
-              -storepass watchly123 \
-              -keypass watchly123 \
-              -dname "CN=Watchly Developer, OU=Watchly Streaming, O=Watchly, L=San Francisco, ST=California, C=US"
+          # The signing key MUST be the same one every release, otherwise Android
+          # refuses to install an update over an existing install (signature
+          # mismatch / INSTALL_FAILED_UPDATE_INCOMPATIBLE). It lives in the repo
+          # secrets, never in git. If the secret is missing we fail loudly
+          # instead of silently minting a brand new key and shipping an APK the
+          # user can never update.
+          if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "::error::RELEASE_KEYSTORE_BASE64 secret is missing. Refusing to build a release that could never be updated in place."
+            exit 1
           fi
+          mkdir -p signing
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > signing/watchly.jks
+          echo "Release keystore restored ($(stat -c%s signing/watchly.jks) bytes)."
+          keytool -list -keystore signing/watchly.jks -storepass "$RELEASE_KEYSTORE_PASSWORD" -alias "$RELEASE_KEYSTORE_ALIAS" | head -n 5
 
       - name: Build Release APK
         run: ./gradlew assembleRelease --stacktrace || ./gradlew assembleDebug --stacktrace
@@ -82,20 +86,17 @@ jobs:
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          tag_name: v1.5.0
-          name: Watchly v1.5.0
+          name: Watchly ${{ github.ref_name }}
           body: |
-            ## Watchly Stability & Streaming Player Fixes (v1.5.0)
-            
-            ### What's New:
-            - **Hardware-Accelerated Web Stream Player (No White Screen):** Pure black layout, hardware acceleration, ad-popup blocking, and instant connecting indicator.
-            - **Always-Visible Multi-Industry & Genre Filters:** Hoisted filter chips on Movies, Shows, and Anime so industry and genre chips never disappear on empty or filtered results.
-            - **Resolved False Update Notification Loop:** ProGuard keep rule preserves BuildConfig so the app accurately recognizes v1.5.0 and stops re-prompting.
-            - **Live Streaming Servers on Details Pages:** Pinned active streaming servers on all titles with quality badges (Server 1, AutoEmbed, VidSrc), replacing outdated "catalogue-only" notices.
-            - **Cryptographic Signature Scheme (V1+V2+V3):** Verified developer identity for enhanced Android installation protection.
-            - **Full Master API Suite Embedded:** TMDB, OMDb, Trakt, OpenSubtitles, and Fanart.tv active with zero manual setup.
+            ## Watchly v${{ github.ref_name }}
+
+            ### Notes
+            - Signed with the permanent release key, so this release installs
+              directly over the previous one.
+            - The app reads its own version from Android, so the update banner
+              always matches the version that is actually installed.
           files: release-output/watchly.apk
           draft: false
           prerelease: false
