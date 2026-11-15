@@ -1,14 +1,12 @@
 /*
- * Watchly — Luxury animated shimmer poster grid skeleton for Browse & Search.
+ * Watchly — Luxury poster grid skeleton for Browse & Search.
+ *
+ * Uses a static diagonal surface gradient rather than an infinite frame-clock
+ * animation so ComposeIdlingResource and UIAutomator accessibility idle checks
+ * never block during slow network fetches on low-core devices.
  */
 package com.watchly.app.ui.components
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,7 +20,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -36,24 +33,14 @@ fun ShimmerPosterGrid(
     modifier: Modifier = Modifier,
     itemCount: Int = 9
 ) {
-    val transition = rememberInfiniteTransition(label = "gridShimmer")
-    val shimmerX by transition.animateFloat(
-        initialValue = -600f,
-        targetValue = 1200f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "gridShimmerX"
-    )
     val brush = Brush.linearGradient(
         colors = listOf(
             WatchlySurfaceVariant,
             Color(0xFF282828),
             WatchlySurfaceVariant
         ),
-        start = Offset(shimmerX, 0f),
-        end = Offset(shimmerX + 550f, 280f)
+        start = Offset.Zero,
+        end = Offset(420f, 280f)
     )
 
     LazyVerticalGrid(

@@ -9,12 +9,6 @@
  */
 package com.watchly.app.ui.home
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -912,24 +906,14 @@ private fun TitleRow(
 
 @Composable
 private fun HomeShimmerLoading() {
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val shimmerX by transition.animateFloat(
-        initialValue = -600f,
-        targetValue = 1200f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmerX"
-    )
     val shimmerBrush = Brush.linearGradient(
         colors = listOf(
             WatchlySurfaceVariant,
             Color(0xFF2A2A2A),
             WatchlySurfaceVariant
         ),
-        start = Offset(shimmerX, 0f),
-        end = Offset(shimmerX + 600f, 300f)
+        start = Offset.Zero,
+        end = Offset(600f, 300f)
     )
 
     LazyColumn(
