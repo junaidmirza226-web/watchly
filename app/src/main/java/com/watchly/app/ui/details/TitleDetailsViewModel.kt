@@ -166,9 +166,9 @@ data class TitleDetailsUiState(
             return episodesBySeason[season].orEmpty()
         }
 
-    /** True when the title has something playable right now. */
+    /** True when the title has something playable right now (including cloud streams). */
     val hasPlayableSource: Boolean
-        get() = playableFiles.isNotEmpty()
+        get() = playableFiles.isNotEmpty() || title.tmdbId != null || title.imdbId != null || title.youtubeId != null || title.localUri != null || title.name.isNotBlank()
 
     /**
      * Badge truth for the details page — ONE source of truth, the
