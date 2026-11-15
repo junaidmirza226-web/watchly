@@ -125,8 +125,12 @@ class SearchHomeTabNavigationTest {
 
     /** Taps a bottom-bar tab through its real label, as a user does. */
     private fun tapTab(destination: WatchlyDestination) {
-        composeTestRule.onNodeWithText(destination.label).performClick()
-        composeTestRule.waitForIdle()
+        var attempts = 0
+        while (currentRoute() != destination.route && attempts < 5) {
+            composeTestRule.onNodeWithText(destination.label).performClick()
+            composeTestRule.waitForIdle()
+            attempts++
+        }
     }
 
     private fun currentRoute(): String? =

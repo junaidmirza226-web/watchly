@@ -166,6 +166,11 @@ jobs:
       # run. The job now boots a fresh AVD with -no-snapshot and runs
       # the bug-named suites in app/src/androidTest — slower to boot,
       # deterministic in behaviour.
+      - name: Pre-assemble debug & androidTest APKs + Maestro CLI
+        run: |
+          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+
       - name: Run instrumented tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -177,7 +182,9 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
+          script: |
+            adb shell pm disable-user --user 0 com.google.android.gms || true
+            ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
 
       # Maestro journeys: ONE emulator session for all flows, each
       # invoked separately so it still produces its OWN JUnit XML +
@@ -220,11 +227,6 @@ jobs:
       # - upload-artifact skips HIDDEN files by default, and the
       #   debug output lives under .maestro/ — the upload step
       #   below sets include-hidden-files: true.
-      - name: Assemble debug APK & install Maestro CLI
-        run: |
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace
-          curl -Ls "https://get.maestro.mobile.dev" | bash
-
       - name: Maestro journeys (01-05 blocking)
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -237,9 +239,10 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
+            adb shell pm disable-user --user 0 com.google.android.gms || true
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             mkdir -p maestro-results
-            sleep 45
+            sleep 20
             $HOME/.maestro/bin/maestro test .maestro/01-home-details-play.yaml --format junit --output maestro-results/01-home-details-play.xml --debug-output maestro-results/01-debug || echo $? > maestro-results/01.exit
             adb shell am force-stop com.watchly.app || true
             $HOME/.maestro/bin/maestro test .maestro/02-downloads-pause-resume.yaml --format junit --output maestro-results/02-downloads-pause-resume.xml --debug-output maestro-results/02-debug || echo $? > maestro-results/02.exit
