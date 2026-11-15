@@ -69,6 +69,13 @@ class HomeTmdbIndustriesTest {
         coEvery { ArchiveApi.fetchMoviesPage(any(), any(), any(), any()) } returns emptyList()
         coEvery { TvMazeApi.fetchTrendingShows() } returns emptyList()
         coEvery { AniListApi.fetchTrendingAnime() } returns emptyList()
+        // Fail-soft defaults for TMDB spy seams so unstubbed languages/endpoints never hit live IO
+        coEvery { TmdbApi.fetchTrendingMovies(any()) } returns emptyList()
+        coEvery { TmdbApi.fetchTopRatedMovies(any()) } returns emptyList()
+        coEvery { TmdbApi.fetchTrendingTv(any()) } returns emptyList()
+        coEvery { TmdbApi.fetchTopRatedTv(any()) } returns emptyList()
+        coEvery { TmdbApi.discoverMovies(any(), any(), any(), any(), any()) } returns emptyList()
+        coEvery { TmdbApi.discoverMoviesAdvanced(any(), any(), any(), any(), any(), any(), any()) } returns emptyList()
     }
 
     @After

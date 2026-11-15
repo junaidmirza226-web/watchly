@@ -72,7 +72,7 @@ class PosterCardAccessibilityTest {
     @Test
     fun `info-only card speaks info only, on the card`() {
         val title = Title(
-            tmdbId = 155,
+            tvmazeId = 155,
             name = "The Dark Knight",
             mediaType = MediaType.MOVIE,
             year = "2008"

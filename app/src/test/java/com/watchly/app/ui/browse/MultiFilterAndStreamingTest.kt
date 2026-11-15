@@ -235,7 +235,7 @@ class MultiFilterAndStreamingTest {
         assertEquals("ko", bundle.title.originalLanguage)
         assertEquals("KOREAN", bundle.title.languageBadge)
         assertEquals("https://image.tmdb.org/t/p/w780/squid_bg.jpg", bundle.title.backdropUrl)
-        assertEquals(listOf(1, 2, 0), bundle.seasonNumbers)
+        assertEquals(listOf(1, 2), bundle.seasonNumbers)
 
         val seasonJson = """
             {

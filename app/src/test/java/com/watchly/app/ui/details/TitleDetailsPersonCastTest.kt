@@ -119,6 +119,8 @@ class TitleDetailsPersonCastTest {
         } throws IOException("offline")
         coEvery { TmdbApi.fetchMovieCast(any(), any()) } returns emptyList()
         coEvery { TmdbApi.fetchTvCast(any(), any()) } returns emptyList()
+        coEvery { TmdbApi.fetchTvDetails(any(), any()) } throws IOException("offline")
+        coEvery { TmdbApi.fetchTvSeasonEpisodes(any(), any(), any()) } returns emptyList()
         coEvery {
             TmdbApi.findByImdbId(any(), any(), any())
         } returns null

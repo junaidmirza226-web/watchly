@@ -360,11 +360,6 @@ class TitleDetailsViewModel(
             } else {
                 null
             }
-            val tmdbTvBundle = if (effectiveTmdbId != null && apiKey != null && !isMovie) {
-                async { runCatching { TmdbApi.fetchTvDetails(apiKey, effectiveTmdbId) } }
-            } else {
-                null
-            }
             val tmdbCast = if (effectiveTmdbId != null && apiKey != null) {
                 async {
                     runCatching {
@@ -438,41 +433,10 @@ class TitleDetailsViewModel(
                 }
             }?.onFailure { failures.add("details") }
 
-            var tmdbSeasonNumbers: List<Int> = emptyList()
-            tmdbTvBundle?.await()?.onSuccess { bundle ->
-                enriched = if (title.tmdbId != null && title.tvmazeId == null && title.anilistId == null) {
-                    bundle.title
-                } else {
-                    mergeFillMissing(enriched, bundle.title)
-                }
-                tmdbSeasonNumbers = bundle.seasonNumbers
-            }
-
-            val tvMazeEpisodeList = episodes?.await()?.getOrElse {
+            val episodeList = episodes?.await()?.getOrElse {
                 failures.add("episodes"); emptyList()
             }.orEmpty()
-
-            // When TVmaze has no episodes (TMDB TV shows & bridged Anime),
-            // load Season 1 episodes from TMDB and register all season tabs!
-            var groupedEpisodes: Map<Int, List<Episode>> = tvMazeEpisodeList.groupBy { ep -> ep.season }
-            if (groupedEpisodes.isEmpty() &&
-                tmdbSeasonNumbers.isNotEmpty() &&
-                effectiveTmdbId != null &&
-                apiKey != null
-            ) {
-                val firstSeason = tmdbSeasonNumbers.first()
-                val firstSeasonEpisodes = runCatching {
-                    TmdbApi.fetchTvSeasonEpisodes(apiKey, effectiveTmdbId, firstSeason)
-                }.getOrDefault(emptyList())
-                val mutableSeasons = LinkedHashMap<Int, List<Episode>>()
-                for (s in tmdbSeasonNumbers) {
-                    mutableSeasons[s] = if (s == firstSeason) firstSeasonEpisodes else emptyList()
-                }
-                if (firstSeasonEpisodes.isNotEmpty() || tmdbSeasonNumbers.isNotEmpty()) {
-                    groupedEpisodes = mutableSeasons
-                }
-            }
-            val episodeList = groupedEpisodes.values.flatten()
+            val groupedEpisodes: Map<Int, List<Episode>> = episodeList.groupBy { ep -> ep.season }
 
             var castList = cast?.await()?.getOrElse {
                 failures.add("cast"); emptyList()
@@ -559,6 +523,11 @@ class TitleDetailsViewModel(
                 )
             }
 
+            // Independent TMDB TV season/episode enrichment for non-TVmaze shows & bridged Anime
+            if (!isMovie && title.tvmazeId == null && effectiveTmdbId != null && apiKey != null) {
+                enrichTmdbTvSeasons(apiKey, effectiveTmdbId)
+            }
+
             // Cycle-4 enrichment runs last and independently: the
             // page above is already complete without it.
             enrichWithProviders(enriched)
@@ -604,6 +573,42 @@ class TitleDetailsViewModel(
         }.getOrDefault(emptyList())
         if (queue.isNotEmpty()) {
             _uiState.update { it.copy(upNextQueue = queue) }
+        }
+    }
+
+    private suspend fun enrichTmdbTvSeasons(apiKey: String, tmdbId: Int) {
+        val bundle = runCatching { TmdbApi.fetchTvDetails(apiKey, tmdbId) }.getOrNull() ?: return
+        val firstSeason = bundle.seasonNumbers.firstOrNull()
+        val firstEpisodes = if (firstSeason != null) {
+            runCatching { TmdbApi.fetchTvSeasonEpisodes(apiKey, tmdbId, firstSeason) }
+                .getOrDefault(emptyList())
+        } else {
+            emptyList()
+        }
+        _uiState.update { cur ->
+            val updatedTitle = if (title.tmdbId != null && title.anilistId == null) {
+                bundle.title
+            } else {
+                mergeFillMissing(cur.title, bundle.title)
+            }
+            val nextEpisodes = if (cur.episodesBySeason.isEmpty() && bundle.seasonNumbers.isNotEmpty()) {
+                val map = LinkedHashMap<Int, List<Episode>>()
+                for (s in bundle.seasonNumbers) {
+                    map[s] = if (s == firstSeason) firstEpisodes else emptyList()
+                }
+                map
+            } else {
+                cur.episodesBySeason
+            }
+            val watched = firstEpisodes
+                .filter { ep -> library.isEpisodeWatched(updatedTitle, ep.season, ep.number) }
+                .map { ep -> "S${ep.season}E${ep.number}" }
+            cur.copy(
+                title = updatedTitle,
+                episodesBySeason = nextEpisodes,
+                selectedSeason = cur.selectedSeason ?: firstSeason,
+                watchedEpisodes = cur.watchedEpisodes + watched
+            )
         }
     }
 

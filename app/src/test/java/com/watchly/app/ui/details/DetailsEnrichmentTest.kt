@@ -102,6 +102,8 @@ class DetailsEnrichmentTest {
         // starves the state update these tests assert on.
         coEvery { TmdbApi.fetchTvCast(any(), any()) } returns emptyList()
         coEvery { TmdbApi.fetchMovieCast(any(), any()) } returns emptyList()
+        coEvery { TmdbApi.fetchTvDetails(any(), any()) } throws java.io.IOException("offline")
+        coEvery { TmdbApi.fetchTvSeasonEpisodes(any(), any(), any()) } returns emptyList()
         coEvery {
             TmdbApi.fetchRecommendations(any(), any(), any(), any())
         } returns emptyList()

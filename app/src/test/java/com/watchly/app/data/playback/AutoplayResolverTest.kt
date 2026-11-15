@@ -19,7 +19,7 @@ class AutoplayResolverTest {
     )
 
     private fun infoOnly(name: String) = Title(
-        tmdbId = name.hashCode(), name = name, mediaType = MediaType.MOVIE
+        tvmazeId = name.hashCode(), name = name, mediaType = MediaType.MOVIE
     )
 
     private fun episode(title: Title, label: String) =
