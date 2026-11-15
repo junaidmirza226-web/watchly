@@ -682,9 +682,7 @@ class TitleDetailsViewModel(
     fun onPlayRequested() {
         _uiState.update {
             it.copy(
-                infoMessage = "“${it.title.name}” is catalogue-only for now — " +
-                    "there's no video file Watchly can play for it yet. " +
-                    "Public-domain titles and YouTube channel titles play right here."
+                infoMessage = "“${it.title.name}” is catalogue-only. No video file available."
             )
         }
     }
@@ -713,24 +711,22 @@ class TitleDetailsViewModel(
                 }
             repo == null || !state.hasPlayableSource -> _uiState.update {
                 it.copy(
-                    infoMessage = "Only titles that can play in Watchly can be " +
-                        "downloaded — public-domain films and your own library " +
-                        "files. “${it.title.name}” is in the catalogue only for " +
-                        "now, so there's no file to save."
+                    infoMessage = "Only public-domain films and your own " +
+                        "library files can be saved for offline watching."
                 )
             }
             state.downloadStatus == DownloadStatus.COMPLETED -> _uiState.update {
                 it.copy(
-                    infoMessage = "Already downloaded — find “${it.title.name}” " +
-                        "in My Library → Downloads to play it offline."
+                    infoMessage = "Already downloaded — find it in " +
+                        "My Library → Downloads."
                 )
             }
             state.downloadStatus == DownloadStatus.RUNNING ||
                 state.downloadStatus == DownloadStatus.QUEUED ||
                 state.downloadStatus == DownloadStatus.PAUSED -> _uiState.update {
                 it.copy(
-                    infoMessage = "“${it.title.name}” is already downloading — " +
-                        "progress is in My Library → Downloads."
+                    infoMessage = "Downloading — progress is in " +
+                        "My Library → Downloads."
                 )
             }
             else -> {
@@ -806,8 +802,7 @@ class TitleDetailsViewModel(
             onFailure = {
                 _uiState.update {
                     it.copy(
-                        infoMessage = "Couldn't start the download. Check " +
-                            "your connection and storage space, then try again."
+                        infoMessage = "Couldn't start the download."
                     )
                 }
             }

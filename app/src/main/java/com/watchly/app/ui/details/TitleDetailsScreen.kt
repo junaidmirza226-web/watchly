@@ -333,8 +333,7 @@ fun TitleDetailsScreen(
                             )
                         }
                         Text(
-                            text = "Options for ${watch.region}, via TMDB. " +
-                                "Tapping a service opens its watch page here, in Watchly.",
+                            text = "In ${watch.region}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -356,8 +355,7 @@ fun TitleDetailsScreen(
             item { SectionHeading("Where to watch") }
             item {
                 Text(
-                    text = "Add your free TMDB key in My Library to see " +
-                        "where this title is streaming, for rent or to buy.",
+                    text = "Add a TMDB key in My Library to see where to watch.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp)
@@ -388,72 +386,41 @@ fun TitleDetailsScreen(
             item { Spacer(Modifier.height(24.dp)) }
         }
 
-        item { SectionHeading("Sources") }
-        item {
-            if (state.playableFiles.isNotEmpty()) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                ) {
-                    state.playableFiles.forEach { file ->
-                        SourceRow(file = file)
+        if (state.playableFiles.isNotEmpty() ||
+            state.title.youtubeId != null ||
+            state.filesCheckFailed
+        ) {
+            item { SectionHeading("Sources") }
+            item {
+                if (state.playableFiles.isNotEmpty()) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    ) {
+                        state.playableFiles.forEach { file ->
+                            SourceRow(file = file)
+                        }
+                        Text(
+                            text = "Internet Archive",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
+                } else if (state.title.youtubeId != null) {
                     Text(
-                        text = "Public domain — free to play. Source: Internet Archive.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "YouTube",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                } else if (state.filesCheckFailed) {
+                    Text(
+                        text = "Couldn't reach the servers. Tap Retry.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
-            } else if (state.title.youtubeId != null) {
-                Text(
-                    text = "Plays in Watchly through YouTube's official " +
-                        "embedded player — this is the channel's own " +
-                        "upload, streamed by YouTube.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            } else if (state.filesCheckFailed) {
-                Text(
-                    text = "Watchly couldn't check this title's video files " +
-                        "(the connection failed) — tap Retry above to check again.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            } else if (state.title.tmdbId != null || state.title.imdbId != null || state.title.name.isNotBlank()) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                ) {
-                    StreamServerRow(
-                        serverName = "Cloud Server 1 (Auto Fast)",
-                        badge = "1080p • Multi-Source",
-                        onClick = { onPlay(state.title, state.playableFiles, null, state.upNextQueue) }
-                    )
-                    StreamServerRow(
-                        serverName = "Cloud Server 2 (AutoEmbed CDN)",
-                        badge = "Auto • Fast CDN",
-                        onClick = { onPlay(state.title, state.playableFiles, null, state.upNextQueue) }
-                    )
-                    StreamServerRow(
-                        serverName = "Cloud Server 3 (VidSrc Multi-Stream)",
-                        badge = "1080p • Direct",
-                        onClick = { onPlay(state.title, state.playableFiles, null, state.upNextQueue) }
-                    )
-                    Text(
-                        text = "17 High-Speed Streaming Sources • Auto-failover active",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = WatchlyGoldLight
-                    )
-                }
-            } else {
-                Text(
-                    text = "No streaming servers available for this title right now.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
             }
         }
     }
@@ -836,8 +803,7 @@ private fun DetailsHeader(
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Couldn't check this title's video files — " +
-                            "the connection failed.",
+                        text = "Couldn't reach the servers.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.weight(1f)

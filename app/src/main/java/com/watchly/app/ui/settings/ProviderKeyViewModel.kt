@@ -140,7 +140,7 @@ class ProviderKeyViewModel(
                         isTesting = false,
                         errorMessage = "${provider.displayName} didn't accept that " +
                             "key, or couldn't be reached. Check the key and your " +
-                            "connection, then try again — nothing was saved."
+                            "— nothing was saved."
                     )
                 }
             }

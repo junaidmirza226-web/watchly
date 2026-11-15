@@ -520,9 +520,9 @@ class BrowseViewModel(
                         isLoading = false,
                         isLoadingMore = false,
                         errorMessage = if (reset && it.titles.isEmpty()) {
-                            "Couldn't load content. Check your connection and try again."
+                            "Couldn't load content."
                         } else {
-                            "Couldn't load more. Pull down to try again."
+                            "Couldn't load more."
                         }
                     )
                 }
@@ -582,9 +582,9 @@ class BrowseViewModel(
                     isLoading = false,
                     isLoadingMore = false,
                     errorMessage = if (isFirstLoad) {
-                        "Couldn't load content. Check your connection and try again."
+                        "Couldn't load content."
                     } else {
-                        "Couldn't load more. Pull down to try again."
+                        "Couldn't load more."
                     }
                 )
             }

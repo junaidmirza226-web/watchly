@@ -508,7 +508,7 @@ private fun TitleRow(
                 modifier = Modifier.padding(horizontal = 16.dp)
             ) {
                 Text(
-                    text = "Couldn't load this row.",
+                    text = "Failed to load.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.weight(1f)
@@ -683,7 +683,7 @@ internal fun TmdbUnlockCard(
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = "Add your free TMDB key to unlock Bollywood, Tollywood, Hollywood, Korean and more.",
+            text = "Add a TMDB key to unlock industries.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

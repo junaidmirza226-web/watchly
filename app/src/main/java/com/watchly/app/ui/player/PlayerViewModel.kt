@@ -253,7 +253,7 @@ class PlayerViewModel(
                     _uiState.update {
                         it.copy(
                             isBuffering = false,
-                            errorMessage = "Couldn't find an active stream for “${request.title.name}”. Try again later."
+                            errorMessage = "Couldn't find an active stream for “${request.title.name}”."
                         )
                     }
                 }
@@ -372,7 +372,7 @@ class PlayerViewModel(
                     failedIndexes = failed,
                     failoverNote = null,
                     errorMessage = "Every source for “${state.title.name}” failed. " +
-                        "Try another source, or check your connection."
+                        "Try another source."
                 )
             }
             return
@@ -930,8 +930,7 @@ class PlayerViewModel(
                     )
                     SubtitleSearchOutcome.Failed -> state.copy(
                         subtitlesLoading = false,
-                        subtitleMessage = "Couldn't reach OpenSubtitles. Check " +
-                            "your connection and try again."
+                        subtitleMessage = "Couldn't reach OpenSubtitles."
                     )
                 }
             }
@@ -1051,8 +1050,7 @@ class PlayerViewModel(
 
         /** Shown when OpenSubtitles' daily free allowance is spent. */
         const val QUOTA_MESSAGE: String =
-            "Today's free OpenSubtitles download limit is used up. " +
-                "It resets tomorrow — subtitles already downloaded still work."
+            "Daily subtitle limit used up. Resets tomorrow."
     }
 }
 

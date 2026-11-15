@@ -231,11 +231,11 @@ class HomeViewModel(
                     failedSections = failures.toSet(),
                     errorMessage = when {
                         failures.size == 3 ->
-                            "Couldn't load content. Check your connection and try again."
+                            "Couldn't load content."
                         failures.size == 1 ->
-                            "Couldn't load ${failures.first()}. Showing what we could fetch."
+                            "Couldn't load ${failures.first()}. Showing what loaded."
                         failures.size == 2 ->
-                            "Couldn't load ${failures.joinToString(" and ")}. Showing what we could fetch."
+                            "Couldn't load ${failures.joinToString(" and ")}. Showing what loaded."
                         else -> null
                     }
                 )

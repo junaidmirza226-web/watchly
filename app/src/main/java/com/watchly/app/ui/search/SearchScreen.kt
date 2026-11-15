@@ -404,7 +404,7 @@ private fun SearchSuggestions(
         if (state.recentSearches.isEmpty() && state.trendingSearches.isEmpty()) {
             item {
                 Text(
-                    text = "Search movies, shows and anime — everything in one place.",
+                    text = "Search movies, shows and anime.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 16.dp)
@@ -578,7 +578,7 @@ private fun SearchError(onRetry: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             Text(
                 text = "None of the sources answered — check your " +
-                    "connection and try again.",
+                    "",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center

@@ -83,8 +83,7 @@ class PersonViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = "Couldn't load this person. " +
-                            "Check your connection and try again."
+                        errorMessage = "Couldn't load this person."
                     )
                 }
                 return@launch

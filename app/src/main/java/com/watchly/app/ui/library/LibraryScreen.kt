@@ -762,9 +762,9 @@ private fun TmdbCard(hasKey: Boolean, onClick: () -> Unit) {
         Spacer(Modifier.height(4.dp))
         Text(
             text = if (hasKey) {
-                "Bollywood, Tollywood, Hollywood, Korean and regional industries active."
+                "Industries active."
             } else {
-                "Configure your TMDB API key to customize catalog feeds."
+                "Configure TMDB key for custom feeds."
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -802,7 +802,7 @@ private fun ApiKeysCard(onClick: () -> Unit) {
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "OMDb (Ratings) • Trakt (Trending) • OpenSubtitles (Subtitles)",
+            text = "OMDb • Trakt • OpenSubtitles",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -919,7 +919,7 @@ private fun YourDataCard(
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "Backup or restore your watchlist, watch history, and app preferences.",
+            text = "Backup & restore",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -1121,7 +1121,7 @@ private fun WatchlistSection(
         Spacer(Modifier.height(12.dp))
         if (titles.isEmpty()) {
             Text(
-                text = "Nothing saved yet — tap “+ Watchlist” on any title to keep it here.",
+                text = "Nothing saved yet",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp)
@@ -1202,7 +1202,7 @@ private fun DownloadsSection(
         Spacer(Modifier.height(12.dp))
         if (downloads.isEmpty()) {
             Text(
-                text = "No downloads yet. Downloaded videos will appear here for offline playback.",
+                text = "No downloads yet",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp)
@@ -1210,7 +1210,7 @@ private fun DownloadsSection(
         } else {
             Text(
                 text = "${downloads.size} download${if (downloads.size == 1) "" else "s"} • " +
-                    "${formatBytes(totalBytes)} used • stored inside Watchly only",
+                    "${formatBytes(totalBytes)} used",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp)
@@ -1255,7 +1255,7 @@ private fun LocalFilesSection(
         Spacer(Modifier.height(12.dp))
         Text(
             text = if (localTitles.isEmpty()) {
-                "Play local videos or folders from your device in Watchly."
+                "No local videos yet."
             } else {
                 "${localTitles.size} local video${if (localTitles.size == 1) "" else "s"} ready to play."
             },

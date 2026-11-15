@@ -83,8 +83,7 @@ class TmdbKeyViewModel(
                     _uiState.update {
                         it.copy(
                             isTesting = false,
-                            errorMessage = "Couldn't reach TMDB. Check your connection " +
-                                "and try again — the key was not saved."
+                            errorMessage = "Couldn't reach TMDB. Key not saved."
                         )
                     }
                 }

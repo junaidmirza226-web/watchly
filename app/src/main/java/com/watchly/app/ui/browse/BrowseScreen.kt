@@ -387,20 +387,15 @@ private fun BrowseFilterEmpty(
             Text(
                 text = when {
                     genre != null && filter == PlayabilityFilter.PLAYABLE_ONLY ->
-                        "No playable $genre titles here yet. Playable titles " +
-                            "come from Public Domain films and official " +
-                            "YouTube channels."
+                        "No playable $genre titles yet."
                     genre != null && filter == PlayabilityFilter.INFO_ONLY ->
-                        "No catalogue-only $genre titles here — everything " +
-                            "in $genre plays in Watchly."
+                        "Everything in $genre is playable."
                     genre != null ->
-                        "No titles found for $genre yet."
+                        "No $genre titles found."
                     filter == PlayabilityFilter.PLAYABLE_ONLY ->
-                        "Nothing playable here yet. Playable titles come " +
-                            "from Public Domain films and official YouTube channels."
+                        "Nothing playable here yet."
                     filter == PlayabilityFilter.INFO_ONLY ->
-                        "Everything loaded here is playable — no " +
-                            "catalogue-only titles to show."
+                        "Everything here is playable."
                     else -> "Nothing found."
                 },
                 style = MaterialTheme.typography.bodyMedium,
