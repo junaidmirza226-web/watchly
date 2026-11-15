@@ -126,12 +126,13 @@ object AppUpdateChecker {
         }
     }
 
+    const val CURRENT_VERSION_NAME = "1.5.0"
+
     private fun getCurrentVersion(): String {
         return try {
-            val clazz = Class.forName("com.watchly.app.BuildConfig")
-            clazz.getField("VERSION_NAME").get(null) as? String ?: "1.4.8"
+            com.watchly.app.BuildConfig.VERSION_NAME
         } catch (_: Throwable) {
-            "1.4.8"
+            CURRENT_VERSION_NAME
         }
     }
 }
