@@ -25,28 +25,34 @@ appId: com.watchly.app
 - extendedWaitUntil:
     visible: "Watchly"
     timeout: 60000
+- runFlow:
+    when:
+      visible: "Close app"
+    commands:
+      - tapOn: "Wait"
 # Bottom-nav round trip proves the tab chrome is alive.
 - tapOn: "My Library"
-# Downloads is a deep Library section: on the emulator's small
-# viewport it is below the fold and not even composed until
-# scrolled to (CI run 42290973402's hierarchy proves the Library
-# opens on its top cards). Scroll until it exists.
-- scrollUntilVisible:
-    element: "Downloads"
-    direction: DOWN
-    timeout: 60000
+- extendedWaitUntil:
+    visible: "Profiles"
+    timeout: 20000
+- runFlow:
+    when:
+      notVisible: "Downloads"
+    commands:
+      - scrollUntilVisible:
+          element: "Downloads"
+          direction: DOWN
+          speed: 20
+          timeout: 30000
+- assertVisible: "Downloads"
 - tapOn: "Home"
 - extendedWaitUntil:
     visible: "Watchly"
-    timeout: 10000
-# NOTE on the search-field selector below: the hint ends in
-# ONE Unicode ellipsis character and Maestro text matching is
-# a FULL regex match — "anime..." (three dots) and the bare
-# prefix both provably never match it (CI runs
-# 42290973402/42295191307). The selector uses the exact text.
-# Into Search via its labelled icon, then a known public-domain
-# film (Internet Archive) so Details has a real Play button.
+    timeout: 15000
 - tapOn: "Search"
+- extendedWaitUntil:
+    visible: "Movies, shows, anime…"
+    timeout: 15000
 - tapOn: "Movies, shows, anime…"
 - inputText: "Night of the Living Dead"
 - extendedWaitUntil:

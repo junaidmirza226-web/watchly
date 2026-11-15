@@ -22,13 +22,24 @@ appId: com.watchly.app
 - extendedWaitUntil:
     visible: "Watchly"
     timeout: 60000
+- runFlow:
+    when:
+      visible: "Close app"
+    commands:
+      - tapOn: "Wait"
 - tapOn: "My Library"
-# "My Lists" is a deep Library section — below the fold (and not
-# composed) until scrolled to on the emulator's viewport.
-- scrollUntilVisible:
-    element: "My Lists"
-    direction: DOWN
-    timeout: 60000
+- extendedWaitUntil:
+    visible: "Profiles"
+    timeout: 20000
+- runFlow:
+    when:
+      notVisible: "See all"
+    commands:
+      - scrollUntilVisible:
+          element: "See all"
+          direction: DOWN
+          speed: 20
+          timeout: 30000
 - tapOn: "See all"
 - extendedWaitUntil:
     visible: "New list"

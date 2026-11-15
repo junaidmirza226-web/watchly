@@ -26,7 +26,16 @@ appId: com.watchly.app
 - extendedWaitUntil:
     visible: "Watchly"
     timeout: 60000
+- runFlow:
+    when:
+      visible: "Close app"
+    commands:
+      - tapOn: "Wait"
+- tapOn: "Home"
 - tapOn: "Search"
+- extendedWaitUntil:
+    visible: "Movies, shows, anime…"
+    timeout: 15000
 - tapOn: "Movies, shows, anime…"
 - inputText: "Night of the Living Dead"
 - extendedWaitUntil:
@@ -64,17 +73,29 @@ appId: com.watchly.app
 - pressKey: back
 # Library: Downloads section + the new engine's controls.
 - tapOn: "My Library"
-# Both sections sit deep in the Library's scrolling column —
-# scroll them into existence instead of asserting blind
-# (same evidence as flow 01).
-- scrollUntilVisible:
-    element: "Downloads"
-    direction: DOWN
-    timeout: 60000
-- scrollUntilVisible:
-    element: "On this device"
-    direction: DOWN
-    timeout: 60000
+- extendedWaitUntil:
+    visible: "Profiles"
+    timeout: 20000
+- runFlow:
+    when:
+      notVisible: "Downloads"
+    commands:
+      - scrollUntilVisible:
+          element: "Downloads"
+          direction: DOWN
+          speed: 20
+          timeout: 30000
+- assertVisible: "Downloads"
+- runFlow:
+    when:
+      notVisible: "On this device"
+    commands:
+      - scrollUntilVisible:
+          element: "On this device"
+          direction: DOWN
+          speed: 20
+          timeout: 30000
+- assertVisible: "On this device"
 # Cycle 10: the download-row buttons carry per-title labels for
 # TalkBack ("Pause download of <title>"), so these selectors use
 # the full label shape (Maestro text matching is a full regex).
@@ -90,3 +111,8 @@ appId: com.watchly.app
       - extendedWaitUntil:
           visible: "Pause download of .*"
           timeout: 15000
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Watchly"
+    timeout: 15000
+
