@@ -174,9 +174,9 @@ jobs:
           arch: x86_64
           profile: pixel_6
           force-avd-creation: false
-          emulator-options: -memory 3072 -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest --stacktrace
+          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
 
       # Maestro journeys: ONE emulator session for all flows, each
       # invoked separately so it still produces its OWN JUnit XML +
@@ -227,10 +227,10 @@ jobs:
           arch: x86_64
           profile: pixel_6
           force-avd-creation: false
-          emulator-options: -memory 3072 -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
-            ./gradlew :app:assembleDebug --stacktrace
+            ./gradlew :app:assembleDebug --no-daemon --stacktrace
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             curl -Ls "https://get.maestro.mobile.dev" | bash
             mkdir -p maestro-results
