@@ -51,9 +51,10 @@ class ProviderKeysRepository(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    /** The saved key for [provider], or null when none is saved. */
+    /** The saved key for [provider], or fallback master key when none is saved. */
     fun getKey(provider: ApiProvider): String? =
         prefs.getString(provider.prefsKey, null)?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_KEYS[provider]
 
     /** True when a key is saved for [provider]. */
     fun hasKey(provider: ApiProvider): Boolean = getKey(provider) != null
@@ -76,5 +77,12 @@ class ProviderKeysRepository(context: Context) {
     companion object {
         /** Same file as the TMDB key store — one settings store. */
         const val PREFS_NAME = TmdbKeyRepository.PREFS_NAME
+
+        /** Built-in master keys for out-of-the-box ratings, trending, and subtitles. */
+        val DEFAULT_KEYS: Map<ApiProvider, String> = mapOf(
+            ApiProvider.OMDB to "3fe6e3fc",
+            ApiProvider.TRAKT to "2M3JfayN76tNAq_ppJw6ZXROTDmhsq9THc0pnuqfB6o",
+            ApiProvider.OPENSUBTITLES to "nU9U21UXcHfxmOSCNUHZnFNb80zq0aa9"
+        )
     }
 }
