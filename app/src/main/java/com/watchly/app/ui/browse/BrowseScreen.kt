@@ -397,6 +397,9 @@ private fun LuxuryMultiFilterSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                TextButton(onClick = onResetAll) {
+                    Text("Reset", color = WatchlyGold)
+                }
                 IconButton(onClick = onDismiss) {
                     Icon(
                         imageVector = Icons.Filled.Close,
