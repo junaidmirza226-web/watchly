@@ -1,30 +1,13 @@
 # =============================================================================
 # Watchly — Android Tests (GitHub Actions)
 #
-# IMPORTANT: GitHub only runs workflow files from .github/workflows/ at the
-# repository root. Copy this file to:
-#     .github/workflows/android-tests.yml
-# It will NOT run from testing/github-actions/.
-#
 # What runs:
 #   Job 1  unit-and-lint : JVM unit tests + Robolectric + Roborazzi
-#                          screenshot-golden verification (rides the
-#                          unit-test task — see app/build.gradle.kts)
-#                          + Android Lint. No emulator. Fast gate for
-#                          every PR.
+#                          screenshot-golden verification + Android Lint.
 #   Job 2  emulator      : instrumented tests (app/src/androidTest) on an
-#                          API 34 emulator, KVM-accelerated, on ubuntu-latest.
-#                          Runs after Job 1 passes.
-#
-# Paparazzi note (2026-11-06): the old `verifyPaparazziDebug` step was
-# removed — no Paparazzi goldens were ever recorded, so the step could
-# only fail, and the screenshot layer moved to Roborazzi (which runs
-# inside the Robolectric harness; see testing-rd-plan.md Upgrade 3).
-# The Paparazzi plugin stays applied in app/build.gradle.kts as
-# scaffolding; CI simply never invokes its tasks.
-#
-# Assumes: Gradle wrapper committed, module :app, JDK 17, no secrets needed
-# for the debug build. See ../README.md for the full assumption list.
+#                          API 34 Pixel 6 emulator (KVM-accelerated).
+#   Job 3  maestro       : Maestro E2E phone journeys (01-05 blocking) on a
+#                          parallel fresh API 34 Pixel 6 emulator (KVM).
 # =============================================================================
 
 name: Android Tests
@@ -33,9 +16,8 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-  workflow_dispatch: # allow manual runs from the Actions tab
+  workflow_dispatch:
 
-# Cancel superseded runs on the same branch/PR to save CI minutes.
 concurrency:
   group: android-tests-${{ github.ref }}
   cancel-in-progress: true
@@ -48,7 +30,7 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Job 1 — JVM tests + lint (no emulator)
+  # Job 1 — JVM tests + Roborazzi goldens + Android Lint
   # ---------------------------------------------------------------------------
   unit-and-lint:
     name: Unit tests, screenshots & lint
@@ -71,10 +53,6 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      # Roborazzi screenshot verification rides THIS step: the
-      # screenshot tests are ordinary Robolectric unit tests, and
-      # app/build.gradle.kts sets roborazzi.test.verify=true for the
-      # test task, so a golden mismatch fails the build right here.
       - name: Unit tests (incl. Robolectric + Roborazzi screenshots)
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 
@@ -110,7 +88,7 @@ jobs:
           PY
 
       - name: Upload test & lint reports
-        if: always() # upload even (especially) when a step above failed
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: unit-test-and-lint-reports
@@ -124,13 +102,13 @@ jobs:
           retention-days: 14
 
   # ---------------------------------------------------------------------------
-  # Job 2 — Instrumented tests on an emulator (KVM, Linux runner only)
+  # Job 2 — Instrumented tests on an API 34 Pixel 6 emulator (KVM)
   # ---------------------------------------------------------------------------
   emulator:
     name: Instrumented tests (emulator, API 34)
     needs: unit-and-lint
-    runs-on: ubuntu-latest # KVM is available on GitHub's Linux runners, not macOS/Windows
-    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -148,9 +126,6 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      # Without KVM the emulator crawls under software emulation and will
-      # likely time out — this is the standard udev-rules step from the
-      # android-emulator-runner docs.
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
@@ -158,18 +133,8 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      # No AVD snapshot caching (removed 2026-11-06, cycle 3): the
-      # cache/“Create AVD snapshot” steps were this job's flaky point
-      # (run 42193131946 attempt 1 died inside snapshot creation and
-      # the rerun failed in the test step booting from that flow),
-      # while an EMPTY androidTest set gave the step nothing real to
-      # run. The job now boots a fresh AVD with -no-snapshot and runs
-      # the bug-named suites in app/src/androidTest — slower to boot,
-      # deterministic in behaviour.
-      - name: Pre-assemble debug & androidTest APKs + Maestro CLI
-        run: |
-          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace
-          curl -Ls "https://get.maestro.mobile.dev" | bash
+      - name: Pre-assemble debug & androidTest APKs
+        run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace
 
       - name: Run instrumented tests
         uses: reactivecircus/android-emulator-runner@v2
@@ -183,99 +148,6 @@ jobs:
           disable-animations: true
           script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace
 
-      # Maestro journeys: ONE emulator session for all flows, each
-      # invoked separately so it still produces its OWN JUnit XML +
-      # debug output in the maestro-results artifact (the per-flow
-      # channel the brief requires; the diagnostic step below dumps
-      # them into the log too).
-      #
-      # BLOCKING: flows 01-03 since cycle 7 (Phase B — 02/03 three
-      # consecutive runs; all three in run 42309170869); flow 04
-      # (search → home tab, added cycle 7) joined the blocking set
-      # in cycle 8 after passing advisory in cycle 7's final CI
-      # (run 42340174840). A failure in ANY of flows 01-04 now
-      # FAILS THE JOB.
-      #
-      # The gate mechanism fits the runner's constraints:
-      # android-emulator-runner runs every script line as its own
-      # `/usr/bin/sh -c` (variables don't persist across lines) and
-      # stops the step at the first failing line. So each flow
-      # records its exit code into maestro-results/NN.exit only on
-      # failure (`|| echo $? > file`, which keeps the line itself
-      # green so later flows still run), and the FINAL line reads
-      # the blocking flows' exit files and exits 1 if any exist.
-      #
-      # Why one session (cycle 6, runs 42282268899-42295191307):
-      # with a fresh boot per flow, the 2-core SwiftShader AVD's
-      # system processes ANR'd under boot load — "System UI /
-      # Process system / Pixel Launcher isn't responding" dialogs
-      # covered the app at random points, reappearing even after a
-      # dismissal. One boot + a settle sleep + the flows' own
-      # dialog dismissal is the robust shape.
-      #
-      # Older traps, all verified in job logs, do not reintroduce:
-      # - `export PATH=...` in a script line is USELESS (each line
-      #   is a separate shell — the export dies with it, and the
-      #   next line dies with "maestro: not found", exit 127).
-      #   Invoke maestro by absolute path.
-      # - Uploading ~/.maestro/tests/ matches nothing
-      #   (upload-artifact does not expand "~"); outputs go to the
-      #   workspace via --output / --debug-output instead.
-      # - upload-artifact skips HIDDEN files by default, and the
-      #   debug output lives under .maestro/ — the upload step
-      #   below sets include-hidden-files: true.
-      - name: Maestro journeys (01-05 blocking)
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          force-avd-creation: false
-          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          disable-animations: true
-          script: |
-            adb install -r app/build/outputs/apk/debug/app-debug.apk
-            mkdir -p maestro-results
-            sleep 45
-            $HOME/.maestro/bin/maestro test .maestro/01-home-details-play.yaml --format junit --output maestro-results/01-home-details-play.xml --debug-output maestro-results/01-debug || echo $? > maestro-results/01.exit
-            adb shell am force-stop com.watchly.app || true
-            $HOME/.maestro/bin/maestro test .maestro/02-downloads-pause-resume.yaml --format junit --output maestro-results/02-downloads-pause-resume.xml --debug-output maestro-results/02-debug || echo $? > maestro-results/02.exit
-            adb shell am force-stop com.watchly.app || true
-            $HOME/.maestro/bin/maestro test .maestro/03-create-list.yaml --format junit --output maestro-results/03-create-list.xml --debug-output maestro-results/03-debug || echo $? > maestro-results/03.exit
-            adb shell am force-stop com.watchly.app || true
-            $HOME/.maestro/bin/maestro test .maestro/04-search-home-tab.yaml --format junit --output maestro-results/04-search-home-tab.xml --debug-output maestro-results/04-debug || echo $? > maestro-results/04.exit
-            adb shell am force-stop com.watchly.app || true
-            $HOME/.maestro/bin/maestro test .maestro/05-regional-multifilter.yaml --format junit --output maestro-results/05-regional-multifilter.xml --debug-output maestro-results/05-debug || echo $? > maestro-results/05.exit
-            FAILED=0; for f in 01 02 03 04 05; do if [ -f maestro-results/$f.exit ]; then echo "BLOCKING Maestro flow $f FAILED (exit $(cat maestro-results/$f.exit))"; FAILED=1; fi; done; if [ $FAILED -eq 1 ]; then echo "Maestro gate: FAILED"; exit 1; fi; echo "Maestro gate: flows 01-05 passed"
-
-      # Diagnostic (cycle 6): the first per-flow run's steps all
-      # reported success yet the maestro-results artifact never
-      # appeared — either the flows wrote nothing, or they wrote
-      # somewhere else. This step captures the evidence INTO the
-      # artifact itself (step logs are not the readable channel):
-      # the maestro version, every file under maestro-results/,
-      # the default ~/.maestro/tests location, and the JUnit XML
-      # contents — and copies the default debug output across in
-      # case that is where it went after all.
-      - name: Maestro results diagnostic
-        if: always()
-        continue-on-error: true
-        run: |
-          mkdir -p maestro-results/default-debug
-          cp -r "$HOME/.maestro/tests/." maestro-results/default-debug/ 2>/dev/null || true
-          {
-            echo "== maestro version =="
-            "$HOME/.maestro/bin/maestro" --version 2>&1 || echo "maestro binary missing"
-            echo "== maestro-results files =="
-            find maestro-results -type f -exec ls -la {} \; 2>&1
-            echo "== default debug dir ($HOME/.maestro/tests) =="
-            find "$HOME/.maestro/tests" -maxdepth 2 2>/dev/null | head -40
-            echo "== junit xml contents =="
-            for f in maestro-results/*.xml; do [ -f "$f" ] || continue; echo "--- $f"; cat "$f" 2>/dev/null; done
-          } > maestro-results/DIAGNOSTIC.txt 2>&1
-          cat maestro-results/DIAGNOSTIC.txt
-
       - name: Upload instrumented test reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -287,7 +159,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Emit Emulator & Maestro Annotations
+      - name: Emit Emulator Annotations
         if: always()
         run: |
           python3 - << 'PY'
@@ -309,6 +181,88 @@ jobs:
               except Exception as e:
                   print(f"::warning title=ParseWarn::{path}: {e}")
           print(f"::notice title=InstrumentedTestSummary::Total={itotal} Failed={ifailed}")
+          PY
+
+  # ---------------------------------------------------------------------------
+  # Job 3 — Maestro E2E Phone Journeys 01-05 (parallel fresh KVM runner)
+  # ---------------------------------------------------------------------------
+  maestro:
+    name: Maestro E2E phone journeys (01-05, API 34)
+    needs: unit-and-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle (with caching)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Maestro journeys (01-05 blocking)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          force-avd-creation: false
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            ./gradlew :app:assembleDebug --no-daemon --stacktrace
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            curl -Ls "https://get.maestro.mobile.dev" | bash
+            mkdir -p maestro-results
+            sleep 45
+            $HOME/.maestro/bin/maestro test .maestro/01-home-details-play.yaml --format junit --output maestro-results/01-home-details-play.xml --debug-output maestro-results/01-debug || echo $? > maestro-results/01.exit
+            adb shell am force-stop com.watchly.app || true
+            $HOME/.maestro/bin/maestro test .maestro/02-downloads-pause-resume.yaml --format junit --output maestro-results/02-downloads-pause-resume.xml --debug-output maestro-results/02-debug || echo $? > maestro-results/02.exit
+            adb shell am force-stop com.watchly.app || true
+            $HOME/.maestro/bin/maestro test .maestro/03-create-list.yaml --format junit --output maestro-results/03-create-list.xml --debug-output maestro-results/03-debug || echo $? > maestro-results/03.exit
+            adb shell am force-stop com.watchly.app || true
+            $HOME/.maestro/bin/maestro test .maestro/04-search-home-tab.yaml --format junit --output maestro-results/04-search-home-tab.xml --debug-output maestro-results/04-debug || echo $? > maestro-results/04.exit
+            adb shell am force-stop com.watchly.app || true
+            $HOME/.maestro/bin/maestro test .maestro/05-regional-multifilter.yaml --format junit --output maestro-results/05-regional-multifilter.xml --debug-output maestro-results/05-debug || echo $? > maestro-results/05.exit
+            FAILED=0; for f in 01 02 03 04 05; do if [ -f maestro-results/$f.exit ]; then echo "BLOCKING Maestro flow $f FAILED (exit $(cat maestro-results/$f.exit))"; FAILED=1; fi; done; if [ $FAILED -eq 1 ]; then echo "Maestro gate: FAILED"; exit 1; fi; echo "Maestro gate: flows 01-05 passed"
+
+      - name: Maestro results diagnostic
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p maestro-results/default-debug
+          cp -r "$HOME/.maestro/tests/." maestro-results/default-debug/ 2>/dev/null || true
+          {
+            echo "== maestro version =="
+            "$HOME/.maestro/bin/maestro" --version 2>&1 || echo "maestro binary missing"
+            echo "== maestro-results files =="
+            find maestro-results -type f -exec ls -la {} \; 2>&1
+            echo "== junit xml contents =="
+            for f in maestro-results/*.xml; do [ -f "$f" ] || continue; echo "--- $f"; cat "$f" 2>/dev/null; done
+          } > maestro-results/DIAGNOSTIC.txt 2>&1
+          cat maestro-results/DIAGNOSTIC.txt
+
+      - name: Emit Maestro Annotations
+        if: always()
+        run: |
+          python3 - << 'PY'
+          import glob, xml.etree.ElementTree as ET
           for mpath in sorted(glob.glob("maestro-results/*.xml")):
               try:
                   mroot = ET.parse(mpath).getroot()
@@ -324,12 +278,6 @@ jobs:
                           print(f"::notice title=MaestroPassed::{mpath} ({name})")
               except Exception as e:
                   print(f"::warning title=MaestroParse::{mpath}: {e}")
-          import os
-          if os.path.exists("maestro-results/android-crashes.txt"):
-              crash_txt = open("maestro-results/android-crashes.txt", errors="ignore").read().strip()
-              if "FATAL EXCEPTION" in crash_txt:
-                  lines = [l for l in crash_txt.splitlines() if l.strip()][-15:]
-                  print("::error title=AndroidCrash::" + " | ".join(lines)[:600])
           PY
 
       - name: Upload Maestro journey output
@@ -339,9 +287,6 @@ jobs:
           name: maestro-journey-reports
           path: |
             maestro-results/
-          # The per-flow debug output (screenshots, hierarchies,
-          # logcat) lives under .maestro/ directories — hidden, and
-          # upload-artifact skips hidden files unless told not to.
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
