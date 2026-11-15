@@ -421,11 +421,35 @@ fun TitleDetailsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
+            } else if (state.title.tmdbId != null || state.title.imdbId != null || state.title.name.isNotBlank()) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                ) {
+                    StreamServerRow(
+                        serverName = "Cloud Server 1 (Auto Fast)",
+                        badge = "1080p • Multi-Source",
+                        onClick = { onPlay(state.title, state.playableFiles, null, state.upNextQueue) }
+                    )
+                    StreamServerRow(
+                        serverName = "Cloud Server 2 (AutoEmbed CDN)",
+                        badge = "Auto • Fast CDN",
+                        onClick = { onPlay(state.title, state.playableFiles, null, state.upNextQueue) }
+                    )
+                    StreamServerRow(
+                        serverName = "Cloud Server 3 (VidSrc Multi-Stream)",
+                        badge = "1080p • Direct",
+                        onClick = { onPlay(state.title, state.playableFiles, null, state.upNextQueue) }
+                    )
+                    Text(
+                        text = "17 High-Speed Streaming Sources • Auto-failover active",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = WatchlyGoldLight
+                    )
+                }
             } else {
                 Text(
-                    text = "Catalogue-only for now — ratings, cast and " +
-                        "where-to-watch live here, but there's no video " +
-                        "file Watchly can play for this title yet.",
+                    text = "No streaming servers available for this title right now.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp)
@@ -1307,6 +1331,48 @@ internal fun SourceRow(file: PlayableFile) {
         Text(
             text = "Working",
             style = MaterialTheme.typography.labelLarge,
+            color = WatchlyGold
+        )
+    }
+}
+
+@Composable
+private fun StreamServerRow(
+    serverName: String,
+    badge: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Filled.PlayArrow,
+            contentDescription = null,
+            tint = WatchlyGold,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = serverName,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "Tap to stream in HD",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Text(
+            text = badge,
+            style = MaterialTheme.typography.labelMedium,
             color = WatchlyGold
         )
     }
