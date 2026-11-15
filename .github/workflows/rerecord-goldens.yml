@@ -45,13 +45,16 @@ jobs:
         run: chmod +x ./gradlew
 
       # Record mode rewrites src/test/screenshots/*.png to match the
-      # current UI instead of failing on a mismatch. continue-on-error
-      # keeps the commit step reachable even if an unrelated unit test
-      # fails in the same task — the goldens are written before any
-      # comparison happens.
+      # current UI instead of failing on a mismatch. Only the screenshot
+      # class runs here — the rest of the unit suite is gated by the
+      # Android Tests workflow, and re-running 440 tests just to write
+      # six PNGs burned past the job timeout last time.
+      # continue-on-error keeps the commit step reachable even if an
+      # unrelated test fails in the same task: the goldens are written
+      # before any comparison happens.
       - name: Record goldens
         continue-on-error: true
-        run: ./gradlew :app:testDebugUnitTest -ProborazziRecord --stacktrace
+        run: ./gradlew :app:testDebugUnitTest -ProborazziRecord --tests "com.watchly.app.ui.screenshots.WatchlyScreenshotTest" --stacktrace
 
       - name: Show what changed
         run: git status --porcelain app/src/test/screenshots/ || true
