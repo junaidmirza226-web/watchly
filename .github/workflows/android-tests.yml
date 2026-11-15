@@ -219,7 +219,8 @@ jobs:
       # - upload-artifact skips HIDDEN files by default, and the
       #   debug output lives under .maestro/ — the upload step
       #   below sets include-hidden-files: true.
-      - name: Maestro journeys (01-04 blocking)
+      - name: Maestro journeys (01-05 blocking)
+        if: always()
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -295,7 +296,9 @@ jobs:
                       for f in list(tc.findall("failure")) + list(tc.findall("error")):
                           cls = tc.attrib.get("classname", "")
                           name = tc.attrib.get("name", "")
-                          msg = (f.attrib.get("message") or (f.text or ""))[:320].replace("\n", " ")
+                          raw_msg = (f.attrib.get("message") or "").strip()
+                          raw_txt = (f.text or "").strip()
+                          msg = (raw_msg if raw_msg else raw_txt)[:420].replace("\n", " ")
                           print(f"::error title=InstrumentedTestFailed::{cls}.{name} -> {msg}")
               except Exception as e:
                   print(f"::warning title=ParseWarn::{path}: {e}")

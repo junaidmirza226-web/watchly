@@ -323,25 +323,31 @@ class HomeViewModel(
             }
             _uiState.update { it.copy(traktRow = traktRow) }
 
-            // Regional & Global Cinema rows (Bollywood, Hollywood, South Indian, Tollywood, Mollywood, Kollywood, Punjabi, Pakistani, Korean, etc.)
+            // Regional & Global Cinema rows (throttled to 4 concurrent calls so 2-core devices never spike)
             if (hasKey && apiKey != null) {
+                val gate = kotlinx.coroutines.sync.Semaphore(4)
                 val rows = INDUSTRIES.map { industry ->
                     async {
-                        runCatching {
-                            if (industry.languageCode.contains("|")) {
-                                TmdbApi.discoverMoviesAdvanced(
-                                    apiKey = apiKey,
-                                    languageQuery = industry.languageCode,
-                                    page = 1
-                                ).take(INDUSTRY_ROW_SIZE)
-                            } else {
-                                TmdbApi.discoverMovies(
-                                    apiKey = apiKey,
-                                    language = industry.languageCode,
-                                    page = 1
-                                ).take(INDUSTRY_ROW_SIZE)
-                            }
-                        }.getOrDefault(emptyList())
+                        gate.acquire()
+                        try {
+                            runCatching {
+                                if (industry.languageCode.contains("|")) {
+                                    TmdbApi.discoverMoviesAdvanced(
+                                        apiKey = apiKey,
+                                        languageQuery = industry.languageCode,
+                                        page = 1
+                                    ).take(INDUSTRY_ROW_SIZE)
+                                } else {
+                                    TmdbApi.discoverMovies(
+                                        apiKey = apiKey,
+                                        language = industry.languageCode,
+                                        page = 1
+                                    ).take(INDUSTRY_ROW_SIZE)
+                                }
+                            }.getOrDefault(emptyList())
+                        } finally {
+                            gate.release()
+                        }
                     }
                 }.mapIndexed { index, deferred ->
                     IndustryRow(INDUSTRIES[index], deferred.await())

@@ -286,10 +286,16 @@ private fun SearchResults(
         if (state.isSearching) {
             item {
                 Box(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = WatchlyGold)
+                    Text(
+                        text = "Searching catalogue…",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = WatchlyGold
+                    )
                 }
             }
         }
@@ -601,12 +607,10 @@ private fun SearchError(onRetry: () -> Unit) {
 private fun SearchLoading() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(color = WatchlyGold)
-            Spacer(Modifier.height(16.dp))
             Text(
                 text = "Searching…",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                style = MaterialTheme.typography.titleMedium,
+                color = WatchlyGold
             )
         }
     }
