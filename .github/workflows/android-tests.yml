@@ -304,16 +304,23 @@ jobs:
               try:
                   mroot = ET.parse(mpath).getroot()
                   for tc in mroot.iter("testcase"):
-                      status = "FAIL" if (tc.find("failure") is not None or tc.find("error") is not None) else "PASS"
+                      fe = tc.find("failure")
+                      if fe is None:
+                          fe = tc.find("error")
                       name = tc.attrib.get("name", mpath)
-                      if status == "FAIL":
-                          fe = tc.find("failure") or tc.find("error")
-                          fmsg = (fe.attrib.get("message") or (fe.text or ""))[:300].replace("\n", " ")
-                          print(f"::error title=MaestroFailed::{name} -> {fmsg}")
+                      if fe is not None:
+                          fmsg = ((fe.attrib.get("message") or "") + " " + (fe.text or "")).strip()[:450].replace("\n", " ")
+                          print(f"::error title=MaestroFailed::{mpath} ({name}) -> {fmsg}")
                       else:
-                          print(f"::notice title=MaestroPassed::{name}")
+                          print(f"::notice title=MaestroPassed::{mpath} ({name})")
               except Exception as e:
                   print(f"::warning title=MaestroParse::{mpath}: {e}")
+          import os
+          if os.path.exists("maestro-results/android-crashes.txt"):
+              crash_txt = open("maestro-results/android-crashes.txt", errors="ignore").read().strip()
+              if "FATAL EXCEPTION" in crash_txt:
+                  lines = [l for l in crash_txt.splitlines() if l.strip()][-15:]
+                  print("::error title=AndroidCrash::" + " | ".join(lines)[:600])
           PY
 
       - name: Upload Maestro journey output
