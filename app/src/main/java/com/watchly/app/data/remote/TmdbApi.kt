@@ -192,7 +192,8 @@ object TmdbApi {
         params.append("&sort_by=").append(sort.sortParam.enc())
         genreId?.let { params.append("&with_genres=").append(it) }
         if (sort == MovieSort.TOP_RATED) {
-            params.append("&vote_count.gte=100")
+            val minVotes = if (language.isNullOrBlank()) 100 else 10
+            params.append("&vote_count.gte=").append(minVotes)
         }
         parseTvList(httpGet("$BASE_URL/discover/tv$params"))
     }
