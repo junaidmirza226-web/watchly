@@ -755,24 +755,21 @@ private fun TmdbCard(hasKey: Boolean, onClick: () -> Unit) {
             .padding(16.dp)
     ) {
         Text(
-            text = if (hasKey) "TMDB — Connected ✓" else "Unlock the full catalogue",
+            text = if (hasKey) "TMDB Catalog — Connected ✓" else "TMDB Catalog",
             style = MaterialTheme.typography.titleLarge,
             color = WatchlyGold
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
             text = if (hasKey) {
-                "Bollywood, Tollywood, Hollywood, Korean and more — " +
-                    "updated by TMDB every day."
+                "Bollywood, Tollywood, Hollywood, Korean and regional industries active."
             } else {
-                "Right now you're seeing free public-domain films. Add your " +
-                    "free TMDB key to unlock every industry — Bollywood, " +
-                    "Tollywood, Hollywood, Korean and more — always up to date."
+                "Configure your TMDB API key to customize catalog feeds."
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
         Button(
             onClick = onClick,
             colors = ButtonDefaults.buttonColors(
@@ -780,15 +777,13 @@ private fun TmdbCard(hasKey: Boolean, onClick: () -> Unit) {
                 contentColor = Color(0xFF1A1405)
             )
         ) {
-            Text(if (hasKey) "Manage TMDB Key" else "Add TMDB Key")
+            Text(if (hasKey) "Configure TMDB Key" else "Add TMDB Key")
         }
     }
 }
 
 /**
- * The one-go entry to the API Keys hub (cycle 4): every provider
- * key — OMDb ratings, Trakt, OpenSubtitles, Fanart — is added from
- * this one card, in one sitting.
+ * The one-go entry to the API Keys hub: configure OMDb, Trakt, OpenSubtitles.
  */
 @Composable
 private fun ApiKeysCard(onClick: () -> Unit) {
@@ -801,21 +796,17 @@ private fun ApiKeysCard(onClick: () -> Unit) {
             .padding(16.dp)
     ) {
         Text(
-            text = "More API Keys",
+            text = "API Integrations",
             style = MaterialTheme.typography.titleLarge,
             color = WatchlyGold
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
-            text = "Four more free keys, each unlocking one upgrade: " +
-                "OMDb adds IMDb / Rotten Tomatoes / Metacritic ratings, " +
-                "Trakt adds trending + community ratings, OpenSubtitles " +
-                "adds subtitles in the player, Fanart adds HD logos and " +
-                "artwork. Add them all in one go here.",
+            text = "OMDb (Ratings) • Trakt (Trending) • OpenSubtitles (Subtitles)",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
         Button(
             onClick = onClick,
             colors = ButtonDefaults.buttonColors(
@@ -823,7 +814,7 @@ private fun ApiKeysCard(onClick: () -> Unit) {
                 contentColor = Color(0xFF1A1405)
             )
         ) {
-            Text("Open API Keys")
+            Text("Manage API Keys")
         }
     }
 }
@@ -926,18 +917,13 @@ private fun YourDataCard(
             style = MaterialTheme.typography.titleLarge,
             color = WatchlyGold
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
-            text = "Save a backup of your watchlist, lists, " +
-                "continue-watching progress, ratings and settings " +
-                "in one file — then bring it back on any install, " +
-                "so a reinstall never costs you your lists again. " +
-                "API keys are never included in a backup; after a " +
-                "fresh install you enter them once, like a password.",
+            text = "Backup or restore your watchlist, watch history, and app preferences.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = onExport,
@@ -1216,8 +1202,7 @@ private fun DownloadsSection(
         Spacer(Modifier.height(12.dp))
         if (downloads.isEmpty()) {
             Text(
-                text = "No downloads yet. Public-domain films can be saved " +
-                    "from their page for offline watching.",
+                text = "No downloads yet. Downloaded videos will appear here for offline playback.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp)
@@ -1270,13 +1255,9 @@ private fun LocalFilesSection(
         Spacer(Modifier.height(12.dp))
         Text(
             text = if (localTitles.isEmpty()) {
-                "Your own videos, played in Watchly. Add video files " +
-                    "or a whole folder — Watchly only ever sees what " +
-                    "you pick, and removing an entry here never " +
-                    "deletes the file."
+                "Play local videos or folders from your device in Watchly."
             } else {
-                "${localTitles.size} video${if (localTitles.size == 1) "" else "s"} " +
-                    "on this phone, ready to play."
+                "${localTitles.size} local video${if (localTitles.size == 1) "" else "s"} ready to play."
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
