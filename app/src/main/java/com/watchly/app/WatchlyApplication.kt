@@ -60,8 +60,13 @@ class WatchlyApplication : Application(), ImageLoaderFactory {
         com.watchly.app.data.library.ProfilesRepository(this).ensureMigrated()
     }
 
-    override fun newImageLoader(): ImageLoader =
-        ImageLoader.Builder(this)
+    override fun newImageLoader(): ImageLoader {
+        val isEmulator = android.os.Build.HARDWARE.contains("ranchu") ||
+            android.os.Build.HARDWARE.contains("goldfish") ||
+            android.os.Build.FINGERPRINT.contains("generic")
+        return ImageLoader.Builder(this)
+            .allowHardware(!isEmulator)
             .components { add(DataSaverImageInterceptor()) }
             .build()
+    }
 }

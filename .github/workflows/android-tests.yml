@@ -215,6 +215,11 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      - name: Pre-assemble debug APK & install Maestro CLI
+        run: |
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+
       - name: Maestro journeys (01-03 blocking)
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -226,9 +231,7 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
-            ./gradlew :app:assembleDebug --no-daemon --stacktrace
             adb install -r app/build/outputs/apk/debug/app-debug.apk
-            curl -Ls "https://get.maestro.mobile.dev" | bash
             mkdir -p maestro-results
             sleep 45
             $HOME/.maestro/bin/maestro test .maestro/01-home-details-play.yaml --format junit --output maestro-results/01-home-details-play.xml --debug-output maestro-results/01-debug || echo $? > maestro-results/01.exit
@@ -301,6 +304,11 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      - name: Pre-assemble debug APK & install Maestro CLI
+        run: |
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+
       - name: Maestro journeys (04-05 blocking)
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -312,9 +320,7 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
-            ./gradlew :app:assembleDebug --no-daemon --stacktrace
             adb install -r app/build/outputs/apk/debug/app-debug.apk
-            curl -Ls "https://get.maestro.mobile.dev" | bash
             mkdir -p maestro-results
             sleep 45
             $HOME/.maestro/bin/maestro test .maestro/04-search-home-tab.yaml --format junit --output maestro-results/04-search-home-tab.xml --debug-output maestro-results/04-debug || echo $? > maestro-results/04.exit
