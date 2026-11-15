@@ -68,6 +68,7 @@ class DetailsNavigationTest {
 
     @Before
     fun setUp() {
+        com.watchly.app.data.remote.config.RemoteProviderConfig.tmdbApiKey = null
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
         appContext.getSharedPreferences(
             WatchlistRepository.PREFS_NAME,

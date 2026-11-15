@@ -64,6 +64,7 @@ class SearchHomeTabNavigationTest {
 
     @Before
     fun setUp() {
+        com.watchly.app.data.remote.config.RemoteProviderConfig.tmdbApiKey = null
         TitleDetailsStore.clear()
         composeTestRule.setContent {
             val nav = rememberNavController()

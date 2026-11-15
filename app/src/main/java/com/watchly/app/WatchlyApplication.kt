@@ -62,6 +62,12 @@ class WatchlyApplication : Application(), ImageLoaderFactory {
 
     override fun newImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
+            .allowRgb565(true)
+            .memoryCache {
+                coil.memory.MemoryCache.Builder(this)
+                    .maxSizePercent(0.15)
+                    .build()
+            }
             .components { add(DataSaverImageInterceptor()) }
             .build()
 }
