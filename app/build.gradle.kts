@@ -46,8 +46,8 @@ android {
         // v1.2.0 (cycle 10): backup/export, Data Saver, details depth — 120.
         // v1.3.0 (cycle 11): person pages (§3.3) — 130.
         // v1.4.0 (cycle 12): profiles (§8) — 140.
-        versionCode = 149
-        versionName = "1.4.9"
+        versionCode = 150
+        versionName = "1.5.0"
         // Instrumented tests (app/src/androidTest) run under the
         // standard AndroidX runner on the CI emulator.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -74,6 +74,10 @@ android {
                 storePassword = "watchly123"
                 keyAlias = "watchly"
                 keyPassword = "watchly123"
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
             }
         }
     }
