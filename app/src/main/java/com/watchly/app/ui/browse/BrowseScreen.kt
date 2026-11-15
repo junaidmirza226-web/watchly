@@ -107,6 +107,14 @@ fun BrowseScreen(
             )
         )
 
+        // Always show Industry and Genre filter chips at the top across all states
+        BrowseChipRows(
+            state = state,
+            onGenreSelected = viewModel::selectGenre,
+            onSortSelected = viewModel::selectSort,
+            onIndustrySelected = viewModel::selectIndustry
+        )
+
         when {
             state.isLoading -> BrowseLoading()
             // Load failed with NOTHING loaded: the full error
@@ -136,10 +144,7 @@ fun BrowseScreen(
             else -> BrowseGrid(
                 state = state,
                 gridState = gridState,
-                onTitleClick = onTitleClick,
-                onGenreSelected = viewModel::selectGenre,
-                onSortSelected = viewModel::selectSort,
-                onIndustrySelected = viewModel::selectIndustry
+                onTitleClick = onTitleClick
             )
         }
     }
@@ -227,10 +232,7 @@ private fun BrowseChipRows(
 private fun BrowseGrid(
     state: BrowseUiState,
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
-    onTitleClick: (Title) -> Unit,
-    onGenreSelected: (String?) -> Unit,
-    onSortSelected: (BrowseSort) -> Unit,
-    onIndustrySelected: (com.watchly.app.data.browse.Industry?) -> Unit
+    onTitleClick: (Title) -> Unit
 ) {
     Column(Modifier.fillMaxSize()) {
         state.errorMessage?.let { message ->
@@ -250,15 +252,6 @@ private fun BrowseGrid(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            // Chip filters inside the grid so they scroll naturally with the content
-            item(span = { GridItemSpan(3) }) {
-                BrowseChipRows(
-                    state = state,
-                    onGenreSelected = onGenreSelected,
-                    onSortSelected = onSortSelected,
-                    onIndustrySelected = onIndustrySelected
-                )
-            }
             items(state.visibleTitles, key = { it.stableKey }) { title ->
                 PosterCard(title = title, onClick = { onTitleClick(title) })
             }
