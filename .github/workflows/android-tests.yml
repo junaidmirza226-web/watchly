@@ -184,10 +184,10 @@ jobs:
           PY
 
   # ---------------------------------------------------------------------------
-  # Job 3 — Maestro E2E Phone Journeys 01-05 (parallel fresh KVM runner)
+  # Job 3a — Maestro E2E Core Journeys (01-03 blocking, API 34 KVM)
   # ---------------------------------------------------------------------------
-  maestro:
-    name: Maestro E2E phone journeys (01-05, API 34)
+  maestro-core:
+    name: Maestro E2E core journeys (01-03, API 34)
     needs: unit-and-lint
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -215,7 +215,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Maestro journeys (01-05 blocking)
+      - name: Maestro journeys (01-03 blocking)
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -232,33 +232,11 @@ jobs:
             mkdir -p maestro-results
             sleep 45
             $HOME/.maestro/bin/maestro test .maestro/01-home-details-play.yaml --format junit --output maestro-results/01-home-details-play.xml --debug-output maestro-results/01-debug || echo $? > maestro-results/01.exit
-            adb shell am force-stop com.watchly.app || true
             $HOME/.maestro/bin/maestro test .maestro/02-downloads-pause-resume.yaml --format junit --output maestro-results/02-downloads-pause-resume.xml --debug-output maestro-results/02-debug || echo $? > maestro-results/02.exit
-            adb shell am force-stop com.watchly.app || true
             $HOME/.maestro/bin/maestro test .maestro/03-create-list.yaml --format junit --output maestro-results/03-create-list.xml --debug-output maestro-results/03-debug || echo $? > maestro-results/03.exit
-            adb shell am force-stop com.watchly.app || true
-            $HOME/.maestro/bin/maestro test .maestro/04-search-home-tab.yaml --format junit --output maestro-results/04-search-home-tab.xml --debug-output maestro-results/04-debug || echo $? > maestro-results/04.exit
-            adb shell am force-stop com.watchly.app || true
-            $HOME/.maestro/bin/maestro test .maestro/05-regional-multifilter.yaml --format junit --output maestro-results/05-regional-multifilter.xml --debug-output maestro-results/05-debug || echo $? > maestro-results/05.exit
-            FAILED=0; for f in 01 02 03 04 05; do if [ -f maestro-results/$f.exit ]; then echo "BLOCKING Maestro flow $f FAILED (exit $(cat maestro-results/$f.exit))"; FAILED=1; fi; done; if [ $FAILED -eq 1 ]; then echo "Maestro gate: FAILED"; exit 1; fi; echo "Maestro gate: flows 01-05 passed"
+            FAILED=0; for f in 01 02 03; do if [ -f maestro-results/$f.exit ]; then echo "BLOCKING Maestro flow $f FAILED (exit $(cat maestro-results/$f.exit))"; FAILED=1; fi; done; if [ $FAILED -eq 1 ]; then echo "Maestro gate: FAILED"; exit 1; fi; echo "Maestro gate: flows 01-03 passed"
 
-      - name: Maestro results diagnostic
-        if: always()
-        continue-on-error: true
-        run: |
-          mkdir -p maestro-results/default-debug
-          cp -r "$HOME/.maestro/tests/." maestro-results/default-debug/ 2>/dev/null || true
-          {
-            echo "== maestro version =="
-            "$HOME/.maestro/bin/maestro" --version 2>&1 || echo "maestro binary missing"
-            echo "== maestro-results files =="
-            find maestro-results -type f -exec ls -la {} \; 2>&1
-            echo "== junit xml contents =="
-            for f in maestro-results/*.xml; do [ -f "$f" ] || continue; echo "--- $f"; cat "$f" 2>/dev/null; done
-          } > maestro-results/DIAGNOSTIC.txt 2>&1
-          cat maestro-results/DIAGNOSTIC.txt
-
-      - name: Emit Maestro Annotations
+      - name: Emit Maestro Core Annotations
         if: always()
         run: |
           python3 - << 'PY'
@@ -280,11 +258,96 @@ jobs:
                   print(f"::warning title=MaestroParse::{mpath}: {e}")
           PY
 
-      - name: Upload Maestro journey output
+      - name: Upload Maestro core output
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: maestro-journey-reports
+          name: maestro-journey-reports-core
+          path: |
+            maestro-results/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Job 3b — Maestro E2E Search, Navigation & Multi-Filter Studio (04-05 blocking)
+  # ---------------------------------------------------------------------------
+  maestro-discovery:
+    name: Maestro E2E discovery & multi-filter (04-05, API 34)
+    needs: unit-and-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle (with caching)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Maestro journeys (04-05 blocking)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          force-avd-creation: false
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            ./gradlew :app:assembleDebug --no-daemon --stacktrace
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            curl -Ls "https://get.maestro.mobile.dev" | bash
+            mkdir -p maestro-results
+            sleep 45
+            $HOME/.maestro/bin/maestro test .maestro/04-search-home-tab.yaml --format junit --output maestro-results/04-search-home-tab.xml --debug-output maestro-results/04-debug || echo $? > maestro-results/04.exit
+            $HOME/.maestro/bin/maestro test .maestro/05-regional-multifilter.yaml --format junit --output maestro-results/05-regional-multifilter.xml --debug-output maestro-results/05-debug || echo $? > maestro-results/05.exit
+            FAILED=0; for f in 04 05; do if [ -f maestro-results/$f.exit ]; then echo "BLOCKING Maestro flow $f FAILED (exit $(cat maestro-results/$f.exit))"; FAILED=1; fi; done; if [ $FAILED -eq 1 ]; then echo "Maestro gate: FAILED"; exit 1; fi; echo "Maestro gate: flows 04-05 passed"
+
+      - name: Emit Maestro Discovery Annotations
+        if: always()
+        run: |
+          python3 - << 'PY'
+          import glob, xml.etree.ElementTree as ET
+          for mpath in sorted(glob.glob("maestro-results/*.xml")):
+              try:
+                  mroot = ET.parse(mpath).getroot()
+                  for tc in mroot.iter("testcase"):
+                      fe = tc.find("failure")
+                      if fe is None:
+                          fe = tc.find("error")
+                      name = tc.attrib.get("name", mpath)
+                      if fe is not None:
+                          fmsg = ((fe.attrib.get("message") or "") + " " + (fe.text or "")).strip()[:450].replace("\n", " ")
+                          print(f"::error title=MaestroFailed::{mpath} ({name}) -> {fmsg}")
+                      else:
+                          print(f"::notice title=MaestroPassed::{mpath} ({name})")
+              except Exception as e:
+                  print(f"::warning title=MaestroParse::{mpath}: {e}")
+          PY
+
+      - name: Upload Maestro discovery output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-journey-reports-discovery
           path: |
             maestro-results/
           include-hidden-files: true
