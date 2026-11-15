@@ -152,7 +152,9 @@ fun WebStreamPlayerLayout(
     val view = LocalView.current
     val activity = context as? Activity
 
-    // Enter true landscape immersive cinema fullscreen and restore cleanly on exit
+    var landscapeLocked by remember { mutableStateOf(false) }
+
+    // Immersive system-bar fullscreen + clean WebView teardown on exit
     DisposableEffect(activity) {
         val prevOrientation = activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         val window = activity?.window
@@ -160,7 +162,6 @@ fun WebStreamPlayerLayout(
             WindowCompat.getInsetsController(window, view)
         } else null
 
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         insetsController?.let { controller ->
             controller.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -208,7 +209,6 @@ fun WebStreamPlayerLayout(
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
                     setBackgroundColor(android.graphics.Color.BLACK)
-                    setLayerType(View.LAYER_TYPE_HARDWARE, null)
                     settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true
@@ -317,6 +317,14 @@ fun WebStreamPlayerLayout(
                 if (webView.url != streamUrl && webView.originalUrl != streamUrl) {
                     isPageLoading = true
                     webView.loadUrl(streamUrl)
+                }
+            },
+            onRelease = { webView ->
+                runCatching {
+                    webView.stopLoading()
+                    webView.loadUrl("about:blank")
+                    webView.clearHistory()
+                    webView.destroy()
                 }
             },
             modifier = Modifier.fillMaxSize()
@@ -470,6 +478,31 @@ fun WebStreamPlayerLayout(
                             )
                         }
                     }
+                }
+
+                // 1-tap Widescreen Landscape / Portrait toggle
+                Surface(
+                    onClick = {
+                        val nextLandscape = !landscapeLocked
+                        landscapeLocked = nextLandscape
+                        activity?.requestedOrientation = if (nextLandscape) {
+                            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        } else {
+                            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                        }
+                    },
+                    shape = RoundedCornerShape(999.dp),
+                    color = WatchlySurfaceVariant.copy(alpha = 0.92f),
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .border(1.dp, WatchlyGold.copy(alpha = 0.45f), RoundedCornerShape(999.dp))
+                ) {
+                    Text(
+                        text = if (landscapeLocked) "Portrait" else "Landscape",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = WatchlyGoldLight,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    )
                 }
 
                 // 1-tap Next Episode pill for TV / Anime series
