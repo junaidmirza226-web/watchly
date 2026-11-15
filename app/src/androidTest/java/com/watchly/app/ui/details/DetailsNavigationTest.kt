@@ -238,11 +238,12 @@ class DetailsNavigationTest {
         // only exists unmerged (CI run 42211917469 proved the
         // merged finder finds nothing on the emulator).
         try {
-            composeTestRule.waitUntilNodeCount(
-                hasClickAction() and hasAnyDescendant(hasText(TITLE_B.name)),
-                1,
-                timeoutMillis = 10_000
-            )
+            composeTestRule.waitUntil(timeoutMillis = 10_000) {
+                composeTestRule.onAllNodes(
+                    hasClickAction() and hasAnyDescendant(hasText(TITLE_B.name)),
+                    useUnmergedTree = true
+                ).fetchSemanticsNodes().size == 1
+            }
         } catch (t: Throwable) {
             throw AssertionError(
                 "Beta card never composed; route=${currentRoute()} " +

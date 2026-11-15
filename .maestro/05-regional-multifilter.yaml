@@ -23,7 +23,15 @@ appId: com.watchly.app
       visible: "Bollywood"
     commands:
       - tapOn: "Bollywood"
+- scrollUntilVisible:
+    element: "Action"
+    direction: DOWN
+    timeout: 15000
 - tapOn: "Action"
+- scrollUntilVisible:
+    element: "Reset All"
+    direction: DOWN
+    timeout: 15000
 - tapOn: "Reset All"
 - pressKey: back
 - tapOn: "Shows"
