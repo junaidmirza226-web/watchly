@@ -7,7 +7,8 @@
 # pause/resume whenever a running download is actually present.
 appId: com.watchly.app
 ---
-- launchApp
+- launchApp:
+    stopApp: true
 # CI-emulator housekeeping: the 2-core SwiftShader emulator
 # regularly raises a system ANR dialog over the freshly launched
 # app ("System UI isn't responding" / "Process system isn't
@@ -76,26 +77,14 @@ appId: com.watchly.app
 - extendedWaitUntil:
     visible: "Profiles"
     timeout: 20000
-- runFlow:
-    when:
-      notVisible: "Downloads"
-    commands:
-      - scrollUntilVisible:
-          element: "Downloads"
-          direction: DOWN
-          speed: 20
-          timeout: 30000
-- assertVisible: "Downloads"
-- runFlow:
-    when:
-      notVisible: "On this device"
-    commands:
-      - scrollUntilVisible:
-          element: "On this device"
-          direction: DOWN
-          speed: 20
-          timeout: 30000
-- assertVisible: "On this device"
+- scrollUntilVisible:
+    element: "Downloads"
+    direction: DOWN
+    timeout: 60000
+- scrollUntilVisible:
+    element: "On this device"
+    direction: DOWN
+    timeout: 60000
 # Cycle 10: the download-row buttons carry per-title labels for
 # TalkBack ("Pause download of <title>"), so these selectors use
 # the full label shape (Maestro text matching is a full regex).

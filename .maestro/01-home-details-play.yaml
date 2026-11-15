@@ -35,16 +35,10 @@ appId: com.watchly.app
 - extendedWaitUntil:
     visible: "Profiles"
     timeout: 20000
-- runFlow:
-    when:
-      notVisible: "Downloads"
-    commands:
-      - scrollUntilVisible:
-          element: "Downloads"
-          direction: DOWN
-          speed: 20
-          timeout: 30000
-- assertVisible: "Downloads"
+- scrollUntilVisible:
+    element: "Downloads"
+    direction: DOWN
+    timeout: 60000
 - tapOn: "Home"
 - extendedWaitUntil:
     visible: "Watchly"

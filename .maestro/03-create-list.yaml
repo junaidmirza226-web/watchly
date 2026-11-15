@@ -3,7 +3,8 @@
 # depends on any API.
 appId: com.watchly.app
 ---
-- launchApp
+- launchApp:
+    stopApp: true
 # CI-emulator housekeeping: the 2-core SwiftShader emulator
 # regularly raises a system ANR dialog over the freshly launched
 # app ("System UI isn't responding" / "Process system isn't
@@ -31,15 +32,14 @@ appId: com.watchly.app
 - extendedWaitUntil:
     visible: "Profiles"
     timeout: 20000
-- runFlow:
-    when:
-      notVisible: "See all"
-    commands:
-      - scrollUntilVisible:
-          element: "See all"
-          direction: DOWN
-          speed: 20
-          timeout: 30000
+- scrollUntilVisible:
+    element: "My Lists"
+    direction: DOWN
+    timeout: 60000
+- scrollUntilVisible:
+    element: "See all"
+    direction: DOWN
+    timeout: 60000
 - tapOn: "See all"
 - extendedWaitUntil:
     visible: "New list"
