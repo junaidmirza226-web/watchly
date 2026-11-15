@@ -230,7 +230,7 @@ class MultiFilterAndStreamingTest {
               ]
             }
         """.trimIndent()
-        val bundle = TmdbApi.parseTvDetailsBundle(tvJson)
+        val bundle = TmdbApi.parseTvDetailsBundle(tvJson)!!
         assertEquals("Squid Game", bundle.title.name)
         assertEquals("ko", bundle.title.originalLanguage)
         assertEquals("KOREAN", bundle.title.languageBadge)
@@ -252,7 +252,7 @@ class MultiFilterAndStreamingTest {
               ]
             }
         """.trimIndent()
-        val episodes = TmdbApi.parseTvSeasonEpisodes(seasonJson, seasonNumber = 1)
+        val episodes = TmdbApi.parseTvSeasonEpisodes(seasonJson, fallbackSeason = 1)
         assertEquals(1, episodes.size)
         assertEquals("Red Light, Green Light", episodes[0].name)
         assertEquals("https://image.tmdb.org/t/p/w500/ep1.jpg", episodes[0].imageUrl)
