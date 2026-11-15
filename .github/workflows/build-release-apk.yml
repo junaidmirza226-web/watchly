@@ -75,18 +75,18 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.4.8
-          name: Watchly v1.4.8
+          tag_name: v1.4.9
+          name: Watchly v1.4.9
           body: |
-            ## Watchly MovieBox-Grade Streaming & Bollywood Filters (v1.4.8)
+            ## Watchly MovieBox-Grade Streaming & Fanart HD Logos (v1.4.9)
             
             ### What's New:
-            - **Featured Bollywood Hits & South Cinema:** Added dedicated Bollywood and Tollywood rows directly under Trending Movies on Home screen.
-            - **Fully Working Industry Filters:** Browse tab now lets you filter Movies by Bollywood, Tollywood, Kollywood, Mollywood, Punjabi Cinema, Bengali Cinema, Hollywood, and Korean Cinema seamlessly.
-            - **Embedded TMDB Engine:** Embedded user master key seamlessly on first boot so blockbusters and regional cinema load instantly with zero user setup.
-            - **Zero Dead Rows & Resilient Loading:** Cinemeta CDN and modern API failovers ensure movies and TV shows always load with no partial failure errors.
-            - **Dual-Mode High Performance Streaming & Downloads:** ExoPlayer direct streams + Web Stream Player for multi-source embed links.
-            - **Automatic In-App Updates:** Sideloaded APKs now check for new releases on startup and offer a 1-tap "Update Now" installation prompt.
+            - **Fanart.tv HD Logos & Artwork:** Embedded master Fanart key for official transparent clear logos and 4K backdrops on title details pages.
+            - **Full Master API Key Suite Embedded:** TMDB, OMDb (IMDb/RT scores), Trakt (trending), OpenSubtitles (subtitles), and Fanart.tv (artwork) pre-configured with zero manual user setup.
+            - **Featured Bollywood & Regional Hubs:** Bollywood Hits & Tollywood Cinema featured rows on Home + multi-industry Browse filters.
+            - **Modern High-Performance Streaming:** Native ExoPlayer direct streams + In-App WebStreamPlayer for multi-source embeds.
+            - **Clean, Commentary-Free UI:** Sleek, clutter-free Library and Settings screens.
+            - **Automated In-App Updates:** Check for updates on startup with a 1-tap in-app install banner.
           files: release-output/watchly.apk
           draft: false
           prerelease: false
