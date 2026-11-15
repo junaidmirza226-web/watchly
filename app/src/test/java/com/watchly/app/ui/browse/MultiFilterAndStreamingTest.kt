@@ -255,6 +255,6 @@ class MultiFilterAndStreamingTest {
         val episodes = TmdbApi.parseTvSeasonEpisodes(seasonJson, fallbackSeason = 1)
         assertEquals(1, episodes.size)
         assertEquals("Red Light, Green Light", episodes[0].name)
-        assertEquals("https://image.tmdb.org/t/p/w500/ep1.jpg", episodes[0].imageUrl)
+        assertEquals("https://image.tmdb.org/t/p/w300/ep1.jpg", episodes[0].imageUrl)
     }
 }

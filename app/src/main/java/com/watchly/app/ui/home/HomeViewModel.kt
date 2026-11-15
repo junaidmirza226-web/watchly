@@ -192,7 +192,7 @@ class HomeViewModel(
             val hasKey = !apiKey.isNullOrBlank()
             _uiState.update { it.copy(hasTmdbKey = hasKey) }
 
-            // 1. Trending Movies: TMDB (when key active) -> Archive (or Cinemeta rescue if TMDB active & Archive empty)
+            // 1. Trending Movies: TMDB (when key active & non-empty) -> Archive
             val moviesDeferred = async {
                 runCatching {
                     val tmdb = if (hasKey && apiKey != null) {
@@ -201,13 +201,7 @@ class HomeViewModel(
                     if (!tmdb.isNullOrEmpty()) {
                         tmdb
                     } else {
-                        val archive = ArchiveApi.fetchMoviesPage(page = 1, perPage = 20)
-                        if (archive.isNotEmpty() || !hasKey) {
-                            archive
-                        } else {
-                            runCatching { CinemetaApi.fetchTrendingMovies() }
-                                .getOrDefault(archive)
-                        }
+                        ArchiveApi.fetchMoviesPage(page = 1, perPage = 20)
                     }
                 }
             }
