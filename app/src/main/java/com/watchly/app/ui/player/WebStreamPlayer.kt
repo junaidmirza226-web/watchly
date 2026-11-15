@@ -209,6 +209,13 @@ fun WebStreamPlayerLayout(
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
                     setBackgroundColor(android.graphics.Color.BLACK)
+                    val isEmulator = android.os.Build.HARDWARE.contains("ranchu") ||
+                        android.os.Build.HARDWARE.contains("goldfish") ||
+                        android.os.Build.FINGERPRINT.contains("generic")
+                    if (isEmulator) {
+                        // Avoid QEMU Virtio-GPU / swiftshader_indirect host crashes from Chromium GLES
+                        setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                    }
                     settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true

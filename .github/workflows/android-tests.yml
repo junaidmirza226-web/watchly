@@ -239,15 +239,15 @@ jobs:
           script: |
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             mkdir -p maestro-results
-            sleep 35
+            sleep 45
             $HOME/.maestro/bin/maestro test .maestro/01-home-details-play.yaml --format junit --output maestro-results/01-home-details-play.xml --debug-output maestro-results/01-debug || echo $? > maestro-results/01.exit
-            adb shell pm clear com.watchly.app || true
+            adb shell am force-stop com.watchly.app || true
             $HOME/.maestro/bin/maestro test .maestro/02-downloads-pause-resume.yaml --format junit --output maestro-results/02-downloads-pause-resume.xml --debug-output maestro-results/02-debug || echo $? > maestro-results/02.exit
-            adb shell pm clear com.watchly.app || true
+            adb shell am force-stop com.watchly.app || true
             $HOME/.maestro/bin/maestro test .maestro/03-create-list.yaml --format junit --output maestro-results/03-create-list.xml --debug-output maestro-results/03-debug || echo $? > maestro-results/03.exit
-            adb shell pm clear com.watchly.app || true
+            adb shell am force-stop com.watchly.app || true
             $HOME/.maestro/bin/maestro test .maestro/04-search-home-tab.yaml --format junit --output maestro-results/04-search-home-tab.xml --debug-output maestro-results/04-debug || echo $? > maestro-results/04.exit
-            adb shell pm clear com.watchly.app || true
+            adb shell am force-stop com.watchly.app || true
             $HOME/.maestro/bin/maestro test .maestro/05-regional-multifilter.yaml --format junit --output maestro-results/05-regional-multifilter.xml --debug-output maestro-results/05-debug || echo $? > maestro-results/05.exit
             FAILED=0; for f in 01 02 03 04 05; do if [ -f maestro-results/$f.exit ]; then echo "BLOCKING Maestro flow $f FAILED (exit $(cat maestro-results/$f.exit))"; FAILED=1; fi; done; if [ $FAILED -eq 1 ]; then echo "Maestro gate: FAILED"; exit 1; fi; echo "Maestro gate: flows 01-05 passed"
 
