@@ -53,7 +53,19 @@ jobs:
           mkdir -p signing
           printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > signing/watchly.jks
           echo "Release keystore restored ($(stat -c%s signing/watchly.jks) bytes)."
-          keytool -list -keystore signing/watchly.jks -storepass "$RELEASE_KEYSTORE_PASSWORD" -alias "$RELEASE_KEYSTORE_ALIAS" | head -n 5
+          # The keystore's real alias is whatever the key generator chose;
+          # the secret may not match it (a wrong alias fails every release
+          # with "No key with alias found"). Discover it from the keystore
+          # itself instead of trusting the secret, and export it so Gradle
+          # signs with the same alias.
+          KEY_ALIAS=$(keytool -list -keystore signing/watchly.jks -storepass "$RELEASE_KEYSTORE_PASSWORD" | sed -n 's/^Alias name: \(.*\)$/\1/p' | head -n 1)
+          if [ -z "$KEY_ALIAS" ]; then
+            echo "::error::Could not enumerate any alias in the release keystore."
+            exit 1
+          fi
+          echo "Discovered keystore alias: $KEY_ALIAS"
+          echo "RELEASE_KEYSTORE_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          keytool -list -keystore signing/watchly.jks -storepass "$RELEASE_KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" | head -n 5
 
       - name: Build Release APK
         run: ./gradlew assembleRelease --stacktrace || ./gradlew assembleDebug --stacktrace
