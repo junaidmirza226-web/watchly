@@ -79,7 +79,7 @@ class ProviderKeysRepository(context: Context) {
         const val PREFS_NAME = TmdbKeyRepository.PREFS_NAME
 
         /** Built-in master keys for out-of-the-box ratings, trending, subtitles, and HD artwork. */
-        val DEFAULT_KEYS: Map<ApiProvider, String> = mapOf(
+        val DEFAULT_KEYS: MutableMap<ApiProvider, String> = mutableMapOf(
             ApiProvider.OMDB to "3fe6e3fc",
             ApiProvider.TRAKT to "2M3JfayN76tNAq_ppJw6ZXROTDmhsq9THc0pnuqfB6o",
             ApiProvider.OPENSUBTITLES to "nU9U21UXcHfxmOSCNUHZnFNb80zq0aa9",

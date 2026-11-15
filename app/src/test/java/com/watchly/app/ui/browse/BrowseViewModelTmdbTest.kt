@@ -1,4 +1,5 @@
 package com.watchly.app.ui.browse
+import com.watchly.app.data.settings.TestKeys
 
 import android.app.Application
 import android.content.Context
@@ -52,6 +53,7 @@ class BrowseViewModelTmdbTest {
         context.getSharedPreferences(TmdbKeyRepository.PREFS_NAME, Context.MODE_PRIVATE)
             .edit().clear().commit()
         keyRepo = TmdbKeyRepository(context)
+        TestKeys.clearEmbeddedDefaults()
         mockkObject(TmdbApi)
         mockkObject(ArchiveApi)
     }

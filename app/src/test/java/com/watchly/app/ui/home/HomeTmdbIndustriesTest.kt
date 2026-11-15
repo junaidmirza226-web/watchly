@@ -1,4 +1,5 @@
 package com.watchly.app.ui.home
+import com.watchly.app.data.settings.TestKeys
 
 import android.app.Application
 import android.content.Context
@@ -56,6 +57,7 @@ class HomeTmdbIndustriesTest {
         mockkObject(AniListApi)
         mockkObject(ArchiveApi)
         mockkObject(TmdbApi)
+        TestKeys.clearEmbeddedDefaults()
         mockkObject(com.watchly.app.data.remote.YouTubeApi)
         io.mockk.every {
             com.watchly.app.data.remote.YouTubeApi.CHANNELS

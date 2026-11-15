@@ -1,4 +1,5 @@
 package com.watchly.app.ui.details
+import com.watchly.app.data.settings.TestKeys
 
 import android.app.Application
 import android.content.Context
@@ -140,6 +141,7 @@ class TitleDetailsTmdbDownloadsTest {
         mockkObject(TvMazeApi)
         mockkObject(ArchiveApi)
         mockkObject(TmdbApi)
+        TestKeys.clearEmbeddedDefaults()
         // Cycle 10: details also asks TMDB for a trailer + "More like
         // this". Fail soft (none) so an unstubbed seam can never leak a
         // real network call into these tests.

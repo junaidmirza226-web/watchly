@@ -1,4 +1,5 @@
 package com.watchly.app.ui.browse
+import com.watchly.app.data.settings.TestKeys
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
@@ -78,6 +79,7 @@ class BrowsePlayabilityFilterTest {
             android.content.Context.MODE_PRIVATE
         ).edit().clear().commit()
         keyRepo = TmdbKeyRepository(context)
+        TestKeys.clearEmbeddedDefaults()
         mockkObject(TvMazeApi)
         coEvery { TvMazeApi.fetchShowsPage(any()) } returns listOf(showA, showB)
         // Cycle 7: Archive is a source on every tab now. The

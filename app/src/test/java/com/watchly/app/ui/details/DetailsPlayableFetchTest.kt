@@ -1,4 +1,5 @@
 package com.watchly.app.ui.details
+import com.watchly.app.data.settings.TestKeys
 
 import android.app.Application
 import android.content.Context
@@ -72,6 +73,7 @@ class DetailsPlayableFetchTest {
         ).edit().clear().commit()
         library = WatchlistRepository(context)
         mockkObject(ArchiveApi)
+        TestKeys.clearEmbeddedDefaults()
     }
 
     @After

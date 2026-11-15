@@ -26,6 +26,7 @@ class TmdbKeyRepositoryTest {
         context.getSharedPreferences(TmdbKeyRepository.PREFS_NAME, Context.MODE_PRIVATE)
             .edit().clear().commit()
         repo = TmdbKeyRepository(context)
+        TestKeys.clearEmbeddedDefaults()
     }
 
     @Test

@@ -1,4 +1,5 @@
 package com.watchly.app.ui.person
+import com.watchly.app.data.settings.TestKeys
 
 import android.app.Application
 import android.content.Context
@@ -71,6 +72,7 @@ class PersonViewModelTest {
             TmdbKeyRepository.PREFS_NAME, Context.MODE_PRIVATE
         ).edit().clear().commit()
         tmdbKeys = TmdbKeyRepository(context)
+        TestKeys.clearEmbeddedDefaults()
         mockkObject(TmdbApi)
     }
 

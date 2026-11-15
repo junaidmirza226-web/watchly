@@ -37,7 +37,7 @@ enum class Playability {
 
 /** Title-level playability, from the data the title itself carries. */
 fun Title.playability(): Playability =
-    if (archiveId != null || youtubeId != null || localUri != null || tmdbId != null || imdbId != null) {
+    if (archiveId != null || youtubeId != null || localUri != null) {
         Playability.PLAYABLE
     } else {
         Playability.INFO_ONLY

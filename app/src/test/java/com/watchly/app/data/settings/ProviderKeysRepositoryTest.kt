@@ -31,6 +31,7 @@ class ProviderKeysRepositoryTest {
             ProviderKeysRepository.PREFS_NAME, Context.MODE_PRIVATE
         ).edit().clear().commit()
         repo = ProviderKeysRepository(context)
+        TestKeys.clearEmbeddedDefaults()
     }
 
     @Test

@@ -1,4 +1,5 @@
 package com.watchly.app.ui.details
+import com.watchly.app.data.settings.TestKeys
 
 import android.app.Application
 import android.content.Context
@@ -121,6 +122,7 @@ class TitleDetailsCycle10Test {
         mockkObject(TvMazeApi)
         mockkObject(ArchiveApi)
         mockkObject(TmdbApi)
+        TestKeys.clearEmbeddedDefaults()
     }
 
     @After

@@ -1,4 +1,5 @@
 package com.watchly.app.ui.home
+import com.watchly.app.data.settings.TestKeys
 
 import android.app.Application
 import android.content.Context
@@ -59,6 +60,7 @@ class HomeTraktRowTest {
         mockkObject(ArchiveApi)
         mockkObject(YouTubeApi)
         mockkObject(TraktApi)
+        TestKeys.clearEmbeddedDefaults()
         coEvery { ArchiveApi.fetchMoviesPage(any(), any(), any(), any()) } returns emptyList()
         coEvery { TvMazeApi.fetchTrendingShows(any()) } returns emptyList()
         coEvery { AniListApi.fetchTrendingAnime(any()) } returns emptyList()

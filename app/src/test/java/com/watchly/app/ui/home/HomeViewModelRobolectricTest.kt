@@ -1,4 +1,5 @@
 package com.watchly.app.ui.home
+import com.watchly.app.data.settings.TestKeys
 
 import android.app.Application
 import android.os.Looper
@@ -63,6 +64,7 @@ class HomeViewModelRobolectricTest {
         coEvery {
             ArchiveApi.fetchCollectionPage(any(), any(), any(), any())
         } returns emptyList()
+        TestKeys.clearEmbeddedDefaults()
     }
 
     @After

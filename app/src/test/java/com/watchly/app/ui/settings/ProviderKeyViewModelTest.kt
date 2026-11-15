@@ -1,4 +1,5 @@
 package com.watchly.app.ui.settings
+import com.watchly.app.data.settings.TestKeys
 
 import android.app.Application
 import android.content.Context
@@ -55,6 +56,7 @@ class ProviderKeyViewModelTest {
             ProviderKeysRepository.PREFS_NAME, Context.MODE_PRIVATE
         ).edit().clear().commit()
         keys = ProviderKeysRepository(context)
+        TestKeys.clearEmbeddedDefaults()
         mockkObject(OmdbApi)
         mockkObject(TraktApi)
         mockkObject(OpenSubtitlesApi)

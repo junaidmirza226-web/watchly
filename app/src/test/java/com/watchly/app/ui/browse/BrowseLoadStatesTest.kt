@@ -1,4 +1,5 @@
 package com.watchly.app.ui.browse
+import com.watchly.app.data.settings.TestKeys
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
@@ -66,6 +67,7 @@ class BrowseLoadStatesTest {
         }
         mockkObject(AniListApi)
         mockkObject(YouTubeApi)
+        TestKeys.clearEmbeddedDefaults()
         // Anime extras are an enhancement, never the tab's error:
         // channels resolve, fetches return nothing.
         every { YouTubeApi.CHANNELS } returns emptyList()

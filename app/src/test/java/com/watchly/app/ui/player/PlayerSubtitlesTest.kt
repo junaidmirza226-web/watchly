@@ -1,4 +1,5 @@
 package com.watchly.app.ui.player
+import com.watchly.app.data.settings.TestKeys
 
 import android.app.Application
 import android.content.Context
@@ -111,6 +112,7 @@ class PlayerSubtitlesTest {
             WatchlistRepository.PREFS_NAME, Context.MODE_PRIVATE
         ).edit().clear().commit()
         providerKeys = ProviderKeysRepository(context)
+        TestKeys.clearEmbeddedDefaults()
         subtitleDir = java.nio.file.Files.createTempDirectory("subs").toFile()
         fake = FakeEngine()
         mockkObject(OpenSubtitlesApi)

@@ -1,4 +1,5 @@
 package com.watchly.app.ui.details
+import com.watchly.app.data.settings.TestKeys
 
 import android.app.Application
 import android.os.Looper
@@ -67,6 +68,7 @@ class TitleDetailsViewModelTest {
         library = WatchlistRepository(context)
         mockkObject(TvMazeApi)
         mockkObject(ArchiveApi)
+        TestKeys.clearEmbeddedDefaults()
     }
 
     @After

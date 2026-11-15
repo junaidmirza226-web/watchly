@@ -1,4 +1,5 @@
 package com.watchly.app.ui.home
+import com.watchly.app.data.settings.TestKeys
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
@@ -89,6 +90,7 @@ class HomeCurationTest {
         } returns listOf(playableFilm)
         coEvery { TvMazeApi.fetchTrendingShows(any()) } returns listOf(infoShow)
         coEvery { AniListApi.fetchTrendingAnime(any()) } returns listOf(infoAnime)
+        TestKeys.clearEmbeddedDefaults()
     }
 
     @After

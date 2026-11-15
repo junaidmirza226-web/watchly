@@ -1,4 +1,5 @@
 package com.watchly.app.ui.library
+import com.watchly.app.data.settings.TestKeys
 
 import android.app.Application
 import android.content.Context
@@ -81,6 +82,7 @@ class LibraryViewModelTest {
         )
         keyRepo = TmdbKeyRepository(context)
         userLists = ListsRepository(context)
+        TestKeys.clearEmbeddedDefaults()
     }
 
     private fun viewModel() =
