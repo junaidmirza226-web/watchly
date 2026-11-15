@@ -58,7 +58,7 @@ jobs:
           # with "No key with alias found"). Discover it from the keystore
           # itself instead of trusting the secret, and export it so Gradle
           # signs with the same alias.
-          KEY_ALIAS=$(keytool -list -keystore signing/watchly.jks -storepass "$RELEASE_KEYSTORE_PASSWORD" | sed -n 's/^Alias name: \(.*\)$/\1/p' | head -n 1)
+          KEY_ALIAS=$(keytool -list -v -keystore signing/watchly.jks -storepass "$RELEASE_KEYSTORE_PASSWORD" | sed -n 's/^Alias name: \(.*\)$/\1/p' | head -n 1)
           if [ -z "$KEY_ALIAS" ]; then
             echo "::error::Could not enumerate any alias in the release keystore."
             exit 1
