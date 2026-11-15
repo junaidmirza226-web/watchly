@@ -48,3 +48,6 @@
 -keepclassmembers class com.watchly.app.data.remote.config.** {
     <fields>;
 }
+
+# Keep BuildConfig so AppUpdateChecker reads version
+-keep class com.watchly.app.BuildConfig { *; }
