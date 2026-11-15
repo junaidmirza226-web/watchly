@@ -39,7 +39,16 @@ jobs:
           mkdir -p signing
           if [ ! -f signing/watchly.jks ]; then
             echo "Creating persistent release keystore..."
-            keytool -genkeypair -v               -keystore signing/watchly.jks               -storetype PKCS12               -keyalg RSA               -keysize 2048               -validity 10000               -alias watchly               -storepass watchly123               -keypass watchly123               -dname "CN=Watchly, OU=Watchly App, O=Watchly, L=Unknown, ST=Unknown, C=US"
+            keytool -genkeypair -v \
+              -keystore signing/watchly.jks \
+              -storetype PKCS12 \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -alias watchly \
+              -storepass watchly123 \
+              -keypass watchly123 \
+              -dname "CN=Watchly Developer, OU=Watchly Streaming, O=Watchly, L=San Francisco, ST=California, C=US"
           fi
 
       - name: Build Release APK
@@ -75,18 +84,18 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
-          tag_name: v1.4.9
-          name: Watchly v1.4.9
+          tag_name: v1.5.0
+          name: Watchly v1.5.0
           body: |
-            ## Watchly MovieBox-Grade Streaming & Fanart HD Logos (v1.4.9)
+            ## Watchly Stability & Streaming Player Fixes (v1.5.0)
             
             ### What's New:
-            - **Fanart.tv HD Logos & Artwork:** Embedded master Fanart key for official transparent clear logos and 4K backdrops on title details pages.
-            - **Full Master API Key Suite Embedded:** TMDB, OMDb (IMDb/RT scores), Trakt (trending), OpenSubtitles (subtitles), and Fanart.tv (artwork) pre-configured with zero manual user setup.
-            - **Featured Bollywood & Regional Hubs:** Bollywood Hits & Tollywood Cinema featured rows on Home + multi-industry Browse filters.
-            - **Modern High-Performance Streaming:** Native ExoPlayer direct streams + In-App WebStreamPlayer for multi-source embeds.
-            - **Clean, Commentary-Free UI:** Sleek, clutter-free Library and Settings screens.
-            - **Automated In-App Updates:** Check for updates on startup with a 1-tap in-app install banner.
+            - **Hardware-Accelerated Web Stream Player (No White Screen):** Pure black layout, hardware acceleration, ad-popup blocking, and instant connecting indicator.
+            - **Always-Visible Multi-Industry & Genre Filters:** Hoisted filter chips on Movies, Shows, and Anime so industry and genre chips never disappear on empty or filtered results.
+            - **Resolved False Update Notification Loop:** ProGuard keep rule preserves BuildConfig so the app accurately recognizes v1.5.0 and stops re-prompting.
+            - **Live Streaming Servers on Details Pages:** Pinned active streaming servers on all titles with quality badges (Server 1, AutoEmbed, VidSrc), replacing outdated "catalogue-only" notices.
+            - **Cryptographic Signature Scheme (V1+V2+V3):** Verified developer identity for enhanced Android installation protection.
+            - **Full Master API Suite Embedded:** TMDB, OMDb, Trakt, OpenSubtitles, and Fanart.tv active with zero manual setup.
           files: release-output/watchly.apk
           draft: false
           prerelease: false
