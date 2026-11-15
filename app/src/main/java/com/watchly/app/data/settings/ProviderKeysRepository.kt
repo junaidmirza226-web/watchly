@@ -78,11 +78,12 @@ class ProviderKeysRepository(context: Context) {
         /** Same file as the TMDB key store — one settings store. */
         const val PREFS_NAME = TmdbKeyRepository.PREFS_NAME
 
-        /** Built-in master keys for out-of-the-box ratings, trending, and subtitles. */
+        /** Built-in master keys for out-of-the-box ratings, trending, subtitles, and HD artwork. */
         val DEFAULT_KEYS: Map<ApiProvider, String> = mapOf(
             ApiProvider.OMDB to "3fe6e3fc",
             ApiProvider.TRAKT to "2M3JfayN76tNAq_ppJw6ZXROTDmhsq9THc0pnuqfB6o",
-            ApiProvider.OPENSUBTITLES to "nU9U21UXcHfxmOSCNUHZnFNb80zq0aa9"
+            ApiProvider.OPENSUBTITLES to "nU9U21UXcHfxmOSCNUHZnFNb80zq0aa9",
+            ApiProvider.FANART to "42ab51ecdff1d6a6100d90fb4032cc9d"
         )
     }
 }
