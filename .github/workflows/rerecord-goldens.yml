@@ -53,8 +53,16 @@ jobs:
       # unrelated test fails in the same task: the goldens are written
       # before any comparison happens.
       - name: Record goldens
+        id: record
         continue-on-error: true
-        run: ./gradlew :app:testDebugUnitTest -ProborazziRecord --tests "com.watchly.app.ui.screenshots.WatchlyScreenshotTest" --stacktrace
+        run: |
+          ./gradlew :app:testDebugUnitTest -ProborazziRecord --tests "com.watchly.app.ui.screenshots.WatchlyScreenshotTest" --stacktrace 2>&1 | tee gradle-record.log
+          python3 - << 'PY'
+          lines = open("gradle-record.log", errors="ignore").read().splitlines()
+          errs = [l for l in lines if l.startswith("e: ") or "Exception" in l or "FAILED" in l]
+          for e in errs[:20]:
+              print(f"::warning title=RecordDiag::{e[:280]}")
+          PY
 
       - name: Show what changed
         run: git status --porcelain app/src/test/screenshots/ || true

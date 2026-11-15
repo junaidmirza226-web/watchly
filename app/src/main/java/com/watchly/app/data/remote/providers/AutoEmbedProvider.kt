@@ -11,11 +11,10 @@ import kotlinx.coroutines.withContext
  *  - TV: {baseUrl}/embed/tv/{tmdbId}/{season}/{episode}
  */
 class AutoEmbedProvider(
-    private val baseUrl: String = "https://player.autoembed.cc",
-    override val priority: Int = 6
-) : StreamProvider {
-
+    private val baseUrl: String = "https://autoembed.co",
+    override val priority: Int = 6,
     override val name: String = "AutoEmbed"
+) : StreamProvider {
 
     override suspend fun getStreams(
         tmdbId: Int?,
@@ -29,12 +28,25 @@ class AutoEmbedProvider(
         val sources = mutableListOf<StreamSource>()
         try {
             val id = tmdbId?.toString() ?: imdbId ?: return@withContext emptyList()
+            val isAutoEmbedCo = baseUrl.contains("autoembed.co", ignoreCase = true)
             val embedUrl = if (mediaType == MediaType.MOVIE) {
-                "$baseUrl/embed/movie/$id"
+                if (isAutoEmbedCo && tmdbId != null) {
+                    "$baseUrl/movie/tmdb/$tmdbId"
+                } else if (isAutoEmbedCo && imdbId != null) {
+                    "$baseUrl/movie/imdb/$imdbId"
+                } else {
+                    "$baseUrl/embed/movie/$id"
+                }
             } else {
                 val s = season ?: 1
                 val e = episode ?: 1
-                "$baseUrl/embed/tv/$id/$s/$e"
+                if (isAutoEmbedCo && tmdbId != null) {
+                    "$baseUrl/tv/tmdb/$tmdbId-$s-$e"
+                } else if (isAutoEmbedCo && imdbId != null) {
+                    "$baseUrl/tv/imdb/$imdbId-$s-$e"
+                } else {
+                    "$baseUrl/embed/tv/$id/$s/$e"
+                }
             }
 
             val ua = StreamProviderHelper.nextUserAgent()

@@ -181,51 +181,8 @@ fun LibraryScreen(
                 )
             }
 
-            item { TmdbCard(hasKey = state.hasTmdbKey, onClick = onTmdbClick) }
-
-            item { ApiKeysCard(onClick = onApiKeysClick) }
-
-            item {
-                PlaybackSettingsCard(
-                    autoplayNext = state.autoplayNext,
-                    onAutoplayChange = viewModel::setAutoplayNext
-                )
-            }
-
-            item {
-                DataSaverCard(
-                    dataSaver = state.dataSaver,
-                    onDataSaverChange = viewModel::setDataSaver
-                )
-            }
-
-            item {
-                YourDataCard(
-                    backupMessage = state.backupMessage,
-                    onExport = {
-                        exportBackupLauncher.launch(
-                            com.watchly.app.data.backup.BackupRepository
-                                .DEFAULT_FILE_NAME
-                        )
-                    },
-                    onImport = {
-                        importBackupLauncher.launch(arrayOf("application/json"))
-                    }
-                )
-            }
-
-            item {
-                DownloadSettingsCard(
-                    settings = state.downloadSettings,
-                    onWifiOnlyChange = viewModel::setDownloadWifiOnly,
-                    onPauseOnLowBatteryChange =
-                        viewModel::setDownloadPauseOnLowBattery,
-                    onStorageCapChange = viewModel::setDownloadStorageCap
-                )
-            }
-
             if (state.continueWatching.isNotEmpty()) {
-                item {
+                item(key = "continue_watching") {
                     ContinueWatchingRow(
                         items = state.continueWatching,
                         onClick = { progress ->
@@ -242,13 +199,6 @@ fun LibraryScreen(
                 }
             }
 
-            // Stable key (cycle 8): item indices above this section
-            // shifted when the Downloads settings card was added, and
-            // LazyColumn reuses slots positionally while settling —
-            // on slow software rendering the section transiently
-            // composed as the wrong section during tab entry
-            // (DetailsNavigationTest failures, CI runs 42347944271+).
-            // A key pins this slot to the Watchlist section itself.
             item(key = "watchlist") {
                 WatchlistSection(
                     titles = state.watchlist,
@@ -256,7 +206,7 @@ fun LibraryScreen(
                 )
             }
 
-            item {
+            item(key = "my_lists") {
                 ListsSection(
                     lists = state.lists,
                     onListClick = onListClick,
@@ -264,7 +214,7 @@ fun LibraryScreen(
                 )
             }
 
-            item {
+            item(key = "downloads") {
                 DownloadsSection(
                     downloads = state.downloads,
                     totalBytes = state.downloadsTotalBytes,
@@ -291,7 +241,7 @@ fun LibraryScreen(
                 )
             }
 
-            item {
+            item(key = "local_files") {
                 LocalFilesSection(
                     localTitles = state.localTitles,
                     onPlay = { title ->
@@ -308,6 +258,53 @@ fun LibraryScreen(
                         pickFilesLauncher.launch(arrayOf("video/*"))
                     },
                     onAddFolder = { pickFolderLauncher.launch(null) }
+                )
+            }
+
+            item(key = "playback_settings") {
+                PlaybackSettingsCard(
+                    autoplayNext = state.autoplayNext,
+                    onAutoplayChange = viewModel::setAutoplayNext
+                )
+            }
+
+            item(key = "data_saver") {
+                DataSaverCard(
+                    dataSaver = state.dataSaver,
+                    onDataSaverChange = viewModel::setDataSaver
+                )
+            }
+
+            item(key = "download_settings") {
+                DownloadSettingsCard(
+                    settings = state.downloadSettings,
+                    onWifiOnlyChange = viewModel::setDownloadWifiOnly,
+                    onPauseOnLowBatteryChange =
+                        viewModel::setDownloadPauseOnLowBattery,
+                    onStorageCapChange = viewModel::setDownloadStorageCap
+                )
+            }
+
+            item(key = "tmdb_card") {
+                TmdbCard(hasKey = state.hasTmdbKey, onClick = onTmdbClick)
+            }
+
+            item(key = "api_keys") {
+                ApiKeysCard(onClick = onApiKeysClick)
+            }
+
+            item(key = "your_data") {
+                YourDataCard(
+                    backupMessage = state.backupMessage,
+                    onExport = {
+                        exportBackupLauncher.launch(
+                            com.watchly.app.data.backup.BackupRepository
+                                .DEFAULT_FILE_NAME
+                        )
+                    },
+                    onImport = {
+                        importBackupLauncher.launch(arrayOf("application/json"))
+                    }
                 )
             }
         }

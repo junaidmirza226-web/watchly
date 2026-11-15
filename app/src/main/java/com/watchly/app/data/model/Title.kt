@@ -57,8 +57,35 @@ data class Title(
     val year: String? = null,
     val genres: List<String> = emptyList(),
     val runtimeMinutes: Int? = null,
-    val status: String? = null
+    val status: String? = null,
+    val backdropUrl: String? = null,
+    val originalLanguage: String? = null
 ) {
+    /** Best wide image for hero banners and landscape cards, falling back to [posterUrl]. */
+    val heroImageUrl: String?
+        get() = backdropUrl ?: posterUrl
+
+    /** Clean uppercase badge for regional/global cinema language when known. */
+    val languageBadge: String?
+        get() = when (originalLanguage?.lowercase()) {
+            "hi" -> "HINDI"
+            "te" -> "TELUGU"
+            "ta" -> "TAMIL"
+            "ml" -> "MALAYALAM"
+            "kn" -> "KANNADA"
+            "pa" -> "PUNJABI"
+            "ur" -> "URDU"
+            "bn" -> "BENGALI"
+            "en" -> "ENGLISH"
+            "ko" -> "KOREAN"
+            "ja" -> "JAPANESE"
+            "tr" -> "TURKISH"
+            "es" -> "SPANISH"
+            "zh", "cn" -> "CHINESE"
+            "fr" -> "FRENCH"
+            else -> originalLanguage?.takeIf { it.length in 2..3 }?.uppercase()
+        }
+
     /**
      * Stable key for LazyRow / LazyColumn items and future local caching.
      * Prefers the strongest available provider id; falls back to name+type.

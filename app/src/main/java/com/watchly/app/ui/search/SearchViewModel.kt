@@ -240,6 +240,11 @@ class SearchViewModel(
     private fun loadTrendingSearches() {
         viewModelScope.launch {
             val names = ArrayList<String>()
+            val apiKey = tmdbKeys?.getKey()
+            if (!apiKey.isNullOrBlank()) {
+                runCatching { com.watchly.app.data.remote.TmdbApi.fetchTrendingMovies(apiKey) }
+                    .onSuccess { names.addAll(it.take(5).map { title -> title.name }) }
+            }
             runCatching { TvMazeApi.fetchTrendingShows(limit = 5) }
                 .onSuccess { names.addAll(it.map { title -> title.name }) }
             runCatching { AniListApi.fetchTrendingAnime(limit = 5) }

@@ -1,0 +1,36 @@
+# Watchly journey 5: Movies -> Regional Cinema & Multi-Filter Studio -> Reset -> Shows.
+appId: com.watchly.app
+---
+- launchApp
+- runFlow:
+    when:
+      visible: "Close app"
+    commands:
+      - tapOn: "Wait"
+- extendedWaitUntil:
+    visible: "Watchly"
+    timeout: 60000
+- tapOn: "Movies"
+- extendedWaitUntil:
+    visible: "Filters"
+    timeout: 30000
+- tapOn: "Filters"
+- extendedWaitUntil:
+    visible: "Multi-Filter Studio"
+    timeout: 15000
+- runFlow:
+    when:
+      visible: "Bollywood"
+    commands:
+      - tapOn: "Bollywood"
+- tapOn: "Action"
+- tapOn: "Reset All"
+- pressKey: back
+- tapOn: "Shows"
+- extendedWaitUntil:
+    visible: "Shows"
+    timeout: 20000
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Watchly"
+    timeout: 20000

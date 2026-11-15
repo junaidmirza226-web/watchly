@@ -18,6 +18,7 @@ package com.watchly.app.ui.nav
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Animation
@@ -107,7 +108,7 @@ fun WatchlyApp(
     val showBottomBar = navBackStackEntry?.destination?.route != WatchlyRoutes.PLAYER
 
     Scaffold(
-        modifier = modifier,
+        modifier = modifier.imePadding(),
         containerColor = WatchlyBlack,
         bottomBar = { if (showBottomBar) WatchlyBottomBar(navController) }
     ) { innerPadding ->
@@ -226,28 +227,41 @@ internal fun WatchlyNavHost(
             HomeScreen(
                 onTitleClick = openDetails,
                 onSearchClick = { navController.navigate(WatchlyRoutes.SEARCH) },
-                // Cycle 14: the Home no-key card goes straight to
-                // the TMDB key screen (the same destination My
-                // Library's TMDB card uses).
-                onTmdbClick = { navController.navigate(WatchlyRoutes.TMDB_KEY) }
+                onTmdbClick = { navController.navigate(WatchlyRoutes.TMDB_KEY) },
+                onOpenBrowseKind = { kind ->
+                    val route = when (kind) {
+                        BrowseKind.MOVIES -> WatchlyDestination.MOVIES.route
+                        BrowseKind.SHOWS -> WatchlyDestination.SHOWS.route
+                        BrowseKind.ANIME -> WatchlyDestination.ANIME.route
+                    }
+                    val startDestinationId = navController.graph.findStartDestination().id
+                    navController.navigate(route) {
+                        popUpTo(startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
             )
         }
         composable(WatchlyDestination.MOVIES.route) {
             BrowseScreen(
                 kind = BrowseKind.MOVIES,
-                onTitleClick = openDetails
+                onTitleClick = openDetails,
+                onOpenSearch = { navController.navigate(WatchlyRoutes.SEARCH) }
             )
         }
         composable(WatchlyDestination.SHOWS.route) {
             BrowseScreen(
                 kind = BrowseKind.SHOWS,
-                onTitleClick = openDetails
+                onTitleClick = openDetails,
+                onOpenSearch = { navController.navigate(WatchlyRoutes.SEARCH) }
             )
         }
         composable(WatchlyDestination.ANIME.route) {
             BrowseScreen(
                 kind = BrowseKind.ANIME,
-                onTitleClick = openDetails
+                onTitleClick = openDetails,
+                onOpenSearch = { navController.navigate(WatchlyRoutes.SEARCH) }
             )
         }
         composable(WatchlyDestination.LIBRARY.route) {
@@ -405,17 +419,29 @@ internal fun WatchlyNavHost(
                                 title = playedTitle,
                                 files = files,
                                 episodeLabel = episodeLabel,
-                                // Official-YouTube titles have no files:
-                                // they play in the official embedded
-                                // player instead of Media3.
                                 youtubeVideoId = if (files.isEmpty()) {
                                     playedTitle.youtubeId
                                 } else {
                                     null
                                 },
-                                // Cycle 5: autoplay continuation
-                                // (YouTube series episodes).
                                 upNext = upNextQueue
+                            )
+                        )
+                        navController.navigate(WatchlyRoutes.PLAYER)
+                    },
+                    onPlayWithServer = { playedTitle, files, episodeLabel, upNextQueue, serverUrl ->
+                        PlaybackSessionStore.select(
+                            PlaybackRequest(
+                                title = playedTitle,
+                                files = files,
+                                episodeLabel = episodeLabel,
+                                youtubeVideoId = if (files.isEmpty() && serverUrl == null) {
+                                    playedTitle.youtubeId
+                                } else {
+                                    null
+                                },
+                                upNext = upNextQueue,
+                                preferredEmbedUrl = serverUrl
                             )
                         )
                         navController.navigate(WatchlyRoutes.PLAYER)

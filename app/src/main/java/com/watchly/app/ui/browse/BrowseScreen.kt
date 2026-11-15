@@ -1,98 +1,136 @@
 /*
- * Watchly — browse tab screen (Movies / Shows / Anime).
- *
- * Spec §2.2: genre chips filter the grid in place, sort options
- * (Popular / Top Rated / Newest / A–Z), grid loads more as the user
- * scrolls — no "next page" button. One screen, three data sources,
- * driven by BrowseViewModel(kind).
+ * Watchly — Movies, Shows and Anime browse screen with Luxury Multi-Filter Studio.
  */
 package com.watchly.app.ui.browse
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.watchly.app.data.browse.BrowseRatingFilter
 import com.watchly.app.data.browse.BrowseSort
-import com.watchly.app.data.model.Title
+import com.watchly.app.data.browse.BrowseYearFilter
+import com.watchly.app.data.browse.GenreMatchMode
+import com.watchly.app.data.browse.Industry
 import com.watchly.app.data.model.PlayabilityFilter
+import com.watchly.app.data.model.Title
 import com.watchly.app.ui.components.PosterCard
+import com.watchly.app.ui.components.ShimmerPosterGrid
+import com.watchly.app.ui.theme.WatchlyBlack
 import com.watchly.app.ui.theme.WatchlyGold
 import com.watchly.app.ui.theme.WatchlyGoldLight
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
+import com.watchly.app.ui.theme.WatchlySurface
+import com.watchly.app.ui.theme.WatchlySurfaceVariant
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BrowseScreen(
     kind: BrowseKind,
     modifier: Modifier = Modifier,
-    onTitleClick: (Title) -> Unit = {}
+    onTitleClick: (Title) -> Unit = {},
+    onOpenSearch: (() -> Unit)? = null
 ) {
-    val context = LocalContext.current
-    val viewModel: BrowseViewModel = viewModel(
-        factory = BrowseViewModelFactory(kind, context)
-    )
-    val state by viewModel.uiState.collectAsState()
-
-    // Pick up a TMDB key added/removed since this tab last loaded.
-    LaunchedEffect(Unit) { viewModel.refreshKeyState() }
-
     val heading = when (kind) {
         BrowseKind.MOVIES -> "Movies"
         BrowseKind.SHOWS -> "Shows"
         BrowseKind.ANIME -> "Anime"
     }
+    val context = LocalContext.current
+    val viewModel: BrowseViewModel = viewModel(
+        key = "browse_${kind.name}",
+        factory = BrowseViewModelFactory(kind, context)
+    )
+    val state by viewModel.uiState.collectAsState()
     val gridState = rememberLazyGridState()
+    var filterSheetOpen by remember { mutableStateOf(false) }
 
-    // Infinite scroll: when the last visible item is within 6 of the end,
-    // ask for the next chunk.
-    LaunchedEffect(gridState, state.hasMore) {
-        snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
-            .distinctUntilChanged()
-            .filter { lastIndex ->
-                lastIndex != null &&
-                    state.visibleTitles.isNotEmpty() &&
-                    lastIndex >= state.visibleTitles.size - 6
-            }
-            .collect { viewModel.loadMore() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.refreshKeyState()
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    val nearEnd by remember {
+        derivedStateOf {
+            val info = gridState.layoutInfo
+            val total = info.totalItemsCount
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            total > 0 && lastVisible >= total - 6
+        }
+    }
+    LaunchedEffect(nearEnd, state.hasMore, state.isLoadingMore) {
+        if (nearEnd && state.hasMore && !state.isLoadingMore) {
+            viewModel.loadMore()
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
         TopAppBar(
             title = {
                 Text(
@@ -101,46 +139,123 @@ fun BrowseScreen(
                     color = WatchlyGold
                 )
             },
+            actions = {
+                // Luxury Multi-Filter Studio trigger
+                Surface(
+                    onClick = { filterSheetOpen = true },
+                    shape = RoundedCornerShape(999.dp),
+                    color = if (state.activeFilterCount > 0) WatchlyGold else WatchlySurfaceVariant,
+                    modifier = Modifier
+                        .height(40.dp)
+                        .border(
+                            width = 1.dp,
+                            color = WatchlyGold.copy(alpha = if (state.activeFilterCount > 0) 1f else 0.45f),
+                            shape = RoundedCornerShape(999.dp)
+                        )
+                        .semantics { contentDescription = "Open multi-filters" }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Tune,
+                            contentDescription = null,
+                            tint = if (state.activeFilterCount > 0) Color(0xFF1A1405) else WatchlyGold,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = if (state.activeFilterCount > 0) {
+                                "Filters (${state.activeFilterCount})"
+                            } else {
+                                "Filters"
+                            },
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (state.activeFilterCount > 0) Color(0xFF1A1405) else WatchlyGoldLight
+                        )
+                    }
+                }
+                if (onOpenSearch != null) {
+                    Spacer(Modifier.width(4.dp))
+                    IconButton(onClick = onOpenSearch) {
+                        Icon(
+                            imageVector = Icons.Filled.Search,
+                            contentDescription = "Search",
+                            tint = WatchlyGold
+                        )
+                    }
+                } else {
+                    Spacer(Modifier.width(8.dp))
+                }
+            },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.background,
                 titleContentColor = WatchlyGold
             )
         )
 
-        // Always show Industry and Genre filter chips at the top across all states
+        // Active multi-filter summary banner with 1-tap Reset
+        val summary = state.activeFilterSummary
+        if (summary != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .background(WatchlySurface, RoundedCornerShape(12.dp))
+                    .border(1.dp, WatchlyGold.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                    .padding(start = 12.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = WatchlyGoldLight,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = viewModel::clearAllFilters) {
+                    Text(
+                        text = "Reset",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = WatchlyGold
+                    )
+                }
+            }
+        }
+
         BrowseChipRows(
             state = state,
-            onGenreSelected = viewModel::selectGenre,
+            onClearGenres = { viewModel.selectGenre(null) },
+            onToggleGenre = viewModel::toggleGenre,
             onSortSelected = viewModel::selectSort,
-            onIndustrySelected = viewModel::selectIndustry
+            onClearIndustries = { viewModel.selectIndustry(null) },
+            onToggleIndustry = viewModel::toggleIndustry
         )
 
         when {
-            state.isLoading -> BrowseLoading()
-            // Load failed with NOTHING loaded: the full error
-            // state with Retry. Keyed on the raw list (cycle 7): a
-            // load-more failure with titles already loaded must
-            // NOT nuke the screen — it surfaces as a note on the
-            // states below / the grid banner instead.
+            state.isLoading -> ShimmerPosterGrid(
+                modifier = Modifier.fillMaxSize()
+            )
             state.errorMessage != null && state.titles.isEmpty() -> BrowseError(
                 message = state.errorMessage!!,
                 onRetry = viewModel::load
             )
-            // An empty grid ANY active filter can explain (genre,
-            // playability, or the two combined) gets the filter
-            // empty state — never a bare "nothing found" dead end.
             state.isEmpty && !state.isLoadingMore &&
                 (
                     (state.playabilityFilter != PlayabilityFilter.ALL &&
                         state.titles.isNotEmpty()) ||
-                        state.selectedGenre != null
-                    ) -> BrowseFilterEmpty(
+                        state.hasAnyActiveFilter
+                    ) ->
+                BrowseFilterEmpty(
                     genre = state.selectedGenre,
                     filter = state.playabilityFilter,
                     loadError = state.errorMessage,
                     onShowAll = viewModel::clearAllFilters
                 )
-            state.isEmpty -> BrowseEmpty(kind = kind, tmdbActive = state.tmdbActive)
+            state.isEmpty -> BrowseEmpty(kind = state.kind, tmdbActive = state.tmdbActive)
             else -> BrowseGrid(
                 state = state,
                 gridState = gridState,
@@ -148,63 +263,77 @@ fun BrowseScreen(
             )
         }
     }
+
+    if (filterSheetOpen) {
+        LuxuryMultiFilterSheet(
+            state = state,
+            onDismiss = { filterSheetOpen = false },
+            onToggleIndustry = viewModel::toggleIndustry,
+            onClearIndustries = { viewModel.selectIndustry(null) },
+            onToggleGenre = viewModel::toggleGenre,
+            onClearGenres = { viewModel.selectGenre(null) },
+            onGenreMatchModeSelected = viewModel::setGenreMatchMode,
+            onYearSelected = viewModel::selectYearFilter,
+            onRatingSelected = viewModel::selectRatingFilter,
+            onSortSelected = viewModel::selectSort,
+            onResetAll = viewModel::clearAllFilters
+        )
+    }
 }
 
-/**
- * Industry + genre + sort chip rows (cycle 5: hoisted out of the
- * grid so they render in every state, including empty).
- */
 @Composable
 private fun BrowseChipRows(
     state: BrowseUiState,
-    onGenreSelected: (String?) -> Unit,
+    onClearGenres: () -> Unit,
+    onToggleGenre: (String) -> Unit,
     onSortSelected: (BrowseSort) -> Unit,
-    onIndustrySelected: (com.watchly.app.data.browse.Industry?) -> Unit
+    onClearIndustries: () -> Unit,
+    onToggleIndustry: (Industry) -> Unit
 ) {
     Column {
-        // Industry chips (Movies + TMDB): filter by original language.
+        // Regional & Global Cinema Hub rail (supports multi-select!)
         if (state.industries.isNotEmpty()) {
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 item {
                     GenreChip(
                         label = "All Industries",
-                        selected = state.selectedIndustry == null,
-                        onClick = { onIndustrySelected(null) }
+                        selected = state.selectedIndustries.isEmpty() && state.selectedIndustry == null,
+                        onClick = onClearIndustries
                     )
                 }
                 items(state.industries) { industry ->
+                    val isSelected = industry in state.selectedIndustries ||
+                        state.selectedIndustry == industry
                     GenreChip(
                         label = industry.label,
-                        selected = state.selectedIndustry == industry,
-                        onClick = { onIndustrySelected(industry) }
+                        selected = isSelected,
+                        onClick = { onToggleIndustry(industry) }
                     )
                 }
             }
         }
-        // Genre chips
+        // Multi-Select Genre chips
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item {
                 GenreChip(
                     label = "All",
-                    // Spoken apart from the availability row's own
-                    // "All" chip (cycle 14, run 13 labeling): the
-                    // visible text stays "All" on both.
                     spokenLabel = "All, genre filter",
-                    selected = state.selectedGenre == null,
-                    onClick = { onGenreSelected(null) }
+                    selected = state.selectedGenres.isEmpty() && state.selectedGenre == null,
+                    onClick = onClearGenres
                 )
             }
             items(state.genres) { genre ->
+                val isSelected = genre in state.selectedGenres || state.selectedGenre == genre
                 GenreChip(
                     label = genre,
-                    selected = state.selectedGenre == genre,
-                    onClick = { onGenreSelected(genre) }
+                    selected = isSelected,
+                    onClick = { onToggleGenre(genre) }
                 )
             }
         }
@@ -219,6 +348,297 @@ private fun BrowseChipRows(
                     selected = state.sort == sort,
                     onClick = { onSortSelected(sort) }
                 )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun LuxuryMultiFilterSheet(
+    state: BrowseUiState,
+    onDismiss: () -> Unit,
+    onToggleIndustry: (Industry) -> Unit,
+    onClearIndustries: () -> Unit,
+    onToggleGenre: (String) -> Unit,
+    onClearGenres: () -> Unit,
+    onGenreMatchModeSelected: (GenreMatchMode) -> Unit,
+    onYearSelected: (BrowseYearFilter) -> Unit,
+    onRatingSelected: (BrowseRatingFilter) -> Unit,
+    onSortSelected: (BrowseSort) -> Unit,
+    onResetAll: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = WatchlyBlack,
+        contentColor = MaterialTheme.colorScheme.onBackground
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Multi-Filter Studio",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = WatchlyGold
+                    )
+                    Text(
+                        text = "Combine multiple cinemas, genres, eras & ratings simultaneously",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Close filters",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // 1. Regional & Global Cinema (Multi-select)
+            if (state.industries.isNotEmpty()) {
+                FilterSectionHeader(
+                    title = "Cinema & Language (Multi-Select)",
+                    subtitle = if (state.selectedIndustries.isEmpty()) {
+                        "Global — All Languages"
+                    } else {
+                        "${state.selectedIndustries.size} selected"
+                    },
+                    onClear = if (state.selectedIndustries.isNotEmpty()) onClearIndustries else null
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    GenreChip(
+                        label = "All Global",
+                        selected = state.selectedIndustries.isEmpty(),
+                        onClick = onClearIndustries
+                    )
+                    state.industries.forEach { industry ->
+                        GenreChip(
+                            label = industry.label,
+                            selected = industry in state.selectedIndustries,
+                            onClick = { onToggleIndustry(industry) }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = WatchlySurfaceVariant)
+                Spacer(Modifier.height(16.dp))
+            }
+
+            // 2. Genres (Multi-select + Match Any / Match All)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Genres (Multi-Select)",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.weight(1f)
+                )
+                if (state.selectedGenres.size > 1) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(
+                            selected = state.genreMatchMode == GenreMatchMode.ANY,
+                            onClick = { onGenreMatchModeSelected(GenreMatchMode.ANY) },
+                            label = { Text("Match Any") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = WatchlyGold,
+                                selectedLabelColor = Color(0xFF1A1405)
+                            )
+                        )
+                        FilterChip(
+                            selected = state.genreMatchMode == GenreMatchMode.ALL,
+                            onClick = { onGenreMatchModeSelected(GenreMatchMode.ALL) },
+                            label = { Text("Match All") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = WatchlyGold,
+                                selectedLabelColor = Color(0xFF1A1405)
+                            )
+                        )
+                    }
+                } else if (state.selectedGenres.isNotEmpty()) {
+                    TextButton(onClick = onClearGenres) {
+                        Text("Clear", color = WatchlyGold)
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                GenreChip(
+                    label = "All Genres",
+                    selected = state.selectedGenres.isEmpty(),
+                    onClick = onClearGenres
+                )
+                state.genres.forEach { genre ->
+                    GenreChip(
+                        label = genre,
+                        selected = genre in state.selectedGenres,
+                        onClick = { onToggleGenre(genre) }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider(color = WatchlySurfaceVariant)
+            Spacer(Modifier.height(16.dp))
+
+            // 3. Release Year / Decade
+            FilterSectionHeader(
+                title = "Release Year / Era",
+                subtitle = state.yearFilter.label
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                BrowseYearFilter.entries.forEach { yf ->
+                    GenreChip(
+                        label = yf.label,
+                        selected = state.yearFilter == yf,
+                        onClick = { onYearSelected(yf) }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider(color = WatchlySurfaceVariant)
+            Spacer(Modifier.height(16.dp))
+
+            // 4. Minimum Audience / Critic Rating
+            FilterSectionHeader(
+                title = "Minimum Rating",
+                subtitle = state.ratingFilter.label
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                BrowseRatingFilter.entries.forEach { rf ->
+                    GenreChip(
+                        label = rf.label,
+                        selected = state.ratingFilter == rf,
+                        onClick = { onRatingSelected(rf) }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider(color = WatchlySurfaceVariant)
+            Spacer(Modifier.height(16.dp))
+
+            // 5. Sort Order
+            FilterSectionHeader(
+                title = "Sort Results By",
+                subtitle = sortLabel(state.sort)
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                state.availableSorts.forEach { sort ->
+                    GenreChip(
+                        label = sortLabel(sort),
+                        selected = state.sort == sort,
+                        onClick = { onSortSelected(sort) }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // Bottom action buttons
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onResetAll,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                ) {
+                    Text("Reset All", color = WatchlyGold)
+                }
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = WatchlyGold,
+                        contentColor = Color(0xFF1A1405)
+                    ),
+                    modifier = Modifier
+                        .weight(1.4f)
+                        .height(48.dp)
+                ) {
+                    Text(
+                        text = if (state.visibleTitles.isNotEmpty()) {
+                            "Show ${state.visibleTitles.size}+ Titles"
+                        } else {
+                            "Apply Filters"
+                        },
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterSectionHeader(
+    title: String,
+    subtitle: String? = null,
+    onClear: (() -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = WatchlyGoldLight
+                )
+            }
+        }
+        if (onClear != null) {
+            TextButton(onClick = onClear) {
+                Text("Clear", color = WatchlyGold)
             }
         }
     }
@@ -288,12 +708,6 @@ internal fun GenreChip(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             labelColor = MaterialTheme.colorScheme.onSurfaceVariant
         ),
-        // Fixed 48dp height (cycle-4 set the floor as a minimum;
-        // cycle 14 makes it exact — Test Lab run 13 measured the
-        // sort chips at 28dp on a real device even though the
-        // minimum-height version measures 48dp in the local
-        // semantics harness, so the floor no longer depends on
-        // how a minimum constraint is resolved downstream).
         modifier = Modifier
             .height(48.dp)
             .then(
@@ -311,25 +725,6 @@ private fun sortLabel(sort: BrowseSort): String = when (sort) {
     BrowseSort.TOP_RATED -> "Top Rated"
     BrowseSort.NEWEST -> "Newest"
     BrowseSort.A_Z -> "A–Z"
-}
-
-// ---------------------------------------------------------------------
-// Loading / error / empty states
-// ---------------------------------------------------------------------
-
-@Composable
-private fun BrowseLoading() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(color = WatchlyGold)
-            Spacer(Modifier.height(16.dp))
-            Text(
-                text = "Loading…",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
 }
 
 @Composable
@@ -367,11 +762,6 @@ private fun BrowseError(
     }
 }
 
-/**
- * Empty because a filter hides everything (Phase D: playability;
- * cycle 5: genre, or the two combined) — says which filter did it
- * and offers the way out, instead of a "nothing found" dead end.
- */
 @Composable
 private fun BrowseFilterEmpty(
     genre: String?,
@@ -396,14 +786,11 @@ private fun BrowseFilterEmpty(
                         "Nothing playable here yet."
                     filter == PlayabilityFilter.INFO_ONLY ->
                         "Everything here is playable."
-                    else -> "Nothing found."
+                    else -> "No titles match all selected filters."
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            // A load-more failure behind a filtered-empty grid
-            // (cycle 7): the filter explanation stays primary, but
-            // the failure is no longer invisible.
             if (loadError != null) {
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -430,11 +817,6 @@ private fun BrowseFilterEmpty(
 private fun BrowseEmpty(kind: BrowseKind, tmdbActive: Boolean = false) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
-            // Genre wording lives ONLY in BrowseFilterEmpty,
-            // which renders when a genre is actually selected.
-            // This state means "loaded, and genuinely nothing
-            // here" — blaming a genre here lied whenever the
-            // selection was All (cycle 7).
             text = when (kind) {
                 BrowseKind.MOVIES ->
                     if (tmdbActive) {

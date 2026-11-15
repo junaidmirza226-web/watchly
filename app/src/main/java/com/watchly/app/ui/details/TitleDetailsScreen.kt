@@ -116,6 +116,13 @@ fun TitleDetailsScreen(
         String?,
         List<com.watchly.app.data.playback.UpNextItem>
     ) -> Unit = { _, _, _, _ -> },
+    onPlayWithServer: ((
+        Title,
+        List<PlayableFile>,
+        String?,
+        List<com.watchly.app.data.playback.UpNextItem>,
+        String?
+    ) -> Unit)? = null,
     /**
      * Opens a where-to-watch page IN-APP (Phase D). The nav layer
      * routes this to the in-app browser; the default does nothing
@@ -147,6 +154,20 @@ fun TitleDetailsScreen(
     // 2026-11-06: back from details was unreliable).
     BackHandler { onBack() }
 
+    val triggerPlay: (
+        Title,
+        List<PlayableFile>,
+        String?,
+        List<com.watchly.app.data.playback.UpNextItem>,
+        String?
+    ) -> Unit = { playTitle, files, epLabel, queue, serverUrl ->
+        if (onPlayWithServer != null) {
+            onPlayWithServer(playTitle, files, epLabel, queue, serverUrl)
+        } else {
+            onPlay(playTitle, files, epLabel, queue)
+        }
+    }
+
     // The LazyColumn scrolls INSIDE this Box; the back button below is
     // a fixed overlay sibling of it, so it can never scroll away.
     Box(modifier = modifier.fillMaxSize()) {
@@ -159,13 +180,19 @@ fun TitleDetailsScreen(
             DetailsHeader(
                 state = state,
                 onPlay = {
-                    onPlay(
-                        state.title,
-                        state.playableFiles,
-                        null,
-                        state.upNextQueue
-                    )
+                    when {
+                        state.canStreamInApp -> triggerPlay(
+                            state.title,
+                            state.playableFiles,
+                            null,
+                            state.upNextQueue,
+                            state.selectedServerUrl
+                        )
+                        state.filesCheckFailed -> viewModel.retryFilesCheck()
+                        else -> viewModel.onPlayRequested()
+                    }
                 },
+                onSelectServer = viewModel::selectServer,
                 onRetryFiles = viewModel::retryFilesCheck,
                 onToggleWatchlist = viewModel::toggleWatchlist,
                 onToggleWatched = viewModel::toggleWatched,
@@ -285,6 +312,18 @@ fun TitleDetailsScreen(
                     }
                 }
             }
+            if (state.isSeasonLoading) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = WatchlyGold)
+                    }
+                }
+            }
             items(
                 state.selectedEpisodes,
                 key = { "${it.season}-${it.number}" }
@@ -294,11 +333,13 @@ fun TitleDetailsScreen(
                     watched = state.watchedEpisodes.contains("S${episode.season}E${episode.number}"),
                     onToggleWatched = { viewModel.toggleEpisodeWatched(episode) },
                     onPlay = {
-                        onPlay(
+                        val epName = episode.name ?: "Episode ${episode.number}"
+                        triggerPlay(
                             state.title,
                             emptyList(),
-                            "S${episode.season}E${episode.number} - ${episode.name}",
-                            state.upNextQueue
+                            "S${episode.season}E${episode.number} - $epName",
+                            viewModel.episodeQueueAfter(episode),
+                            null
                         )
                     }
                 )
@@ -386,13 +427,10 @@ fun TitleDetailsScreen(
             item { Spacer(Modifier.height(24.dp)) }
         }
 
-        if (state.playableFiles.isNotEmpty() ||
-            state.title.youtubeId != null ||
-            state.filesCheckFailed
-        ) {
-            item { SectionHeading("Sources") }
-            item {
-                if (state.playableFiles.isNotEmpty()) {
+        item { SectionHeading("Sources") }
+        item {
+            when {
+                state.playableFiles.isNotEmpty() -> {
                     Column(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.padding(horizontal = 16.dp)
@@ -406,16 +444,50 @@ fun TitleDetailsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                } else if (state.title.youtubeId != null) {
+                }
+                state.cloudServers.isNotEmpty() -> {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    ) {
+                        state.cloudServers.forEachIndexed { idx, server ->
+                            val label = server.qualityLabel ?: "Server ${idx + 1}"
+                            StreamServerRow(
+                                serverName = "${idx + 1}. $label",
+                                badge = if (server.url == state.selectedServerUrl) "Selected • Auto HD" else "Backup HD",
+                                onClick = {
+                                    viewModel.selectServer(server.url)
+                                    triggerPlay(
+                                        state.title,
+                                        emptyList(),
+                                        null,
+                                        state.upNextQueue,
+                                        server.url
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+                state.title.youtubeId != null -> {
                     Text(
                         text = "YouTube",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
-                } else if (state.filesCheckFailed) {
+                }
+                state.filesCheckFailed -> {
                     Text(
                         text = "Couldn't reach the servers. Tap Retry.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+                else -> {
+                    Text(
+                        text = "Catalogue entry — no stream attached yet.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp)
@@ -677,6 +749,7 @@ private fun DetailsHeader(
     onShare: () -> Unit,
     onDownload: () -> Unit,
     onAddToList: () -> Unit,
+    onSelectServer: (String) -> Unit = {},
     onRetryFiles: () -> Unit = {},
     onWatchTrailer: () -> Unit = {},
     onRatingPreview: (Int) -> Unit = {},
@@ -690,16 +763,14 @@ private fun DetailsHeader(
                 .height(300.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            // TMDB/catalogue art stays primary; the Fanart backdrop
-            // (cycle 4) only fills in when the title has no image.
-            // A hero that fails to LOAD falls through to the next
-            // candidate, then to a gold monogram (Phase D) — never
-            // a dead black hero.
             var failedHeroUrls by remember {
                 mutableStateOf<Set<String>>(emptySet())
             }
-            val heroCandidates =
-                listOfNotNull(title.posterUrl, state.fanartBackdropUrl)
+            val heroCandidates = listOfNotNull(
+                title.backdropUrl,
+                title.posterUrl,
+                state.fanartBackdropUrl
+            )
             val shownHeroUrl =
                 heroCandidates.firstOrNull { it !in failedHeroUrls }
             if (shownHeroUrl != null) {
@@ -1024,6 +1095,36 @@ private fun DetailsHeader(
                     Text("Watch trailer", color = WatchlyGold, maxLines = 1)
                 }
             }
+
+            // Quick Multi-Server Selector strip for cloud-streamable titles
+            if (state.cloudServers.size > 1) {
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = "Streaming Server (${state.cloudServers.size} HD Servers Ready)",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = WatchlyGoldLight
+                )
+                Spacer(Modifier.height(6.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(state.cloudServers, key = { it.url }) { server ->
+                        val isSelected = server.url == state.selectedServerUrl
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { onSelectServer(server.url) },
+                            label = {
+                                Text(server.qualityLabel ?: "Server")
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = WatchlyGold,
+                                selectedLabelColor = Color(0xFF1A1405),
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            modifier = Modifier.heightIn(min = 44.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -1122,8 +1223,40 @@ private fun EpisodeRow(
             .fillMaxWidth()
             .clickable(onClick = onPlay)
             .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.Top
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        if (episode.imageUrl != null) {
+            Box(
+                modifier = Modifier
+                    .width(116.dp)
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = episode.imageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.65f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        tint = WatchlyGold,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "${episode.number}. ${episode.name ?: "Episode ${episode.number}"}",

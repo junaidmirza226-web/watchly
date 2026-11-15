@@ -165,7 +165,12 @@ fun PlayerScreen(
             titleName = state.title.name,
             episodeLabel = state.episodeLabel,
             onBack = onBack,
-            modifier = modifier
+            modifier = modifier,
+            servers = state.embedServers,
+            onSelectServer = viewModel::selectWebServer,
+            hasNextEpisode = state.upNextQueueSize > 0,
+            onNextEpisode = viewModel::skipToNextWebEpisode,
+            onPromoteDirectStream = viewModel::promoteSniffedDirectStream
         )
         return
     }

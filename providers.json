@@ -80,7 +80,7 @@
     {
       "name": "VidCloud",
       "baseUrl": "https://vidcloud9.com",
-      "enabled": true,
+      "enabled": false,
       "priority": 5,
       "type": "EMBED",
       "requiresReferer": true,
@@ -322,7 +322,7 @@
     {
       "name": "StreamWish",
       "baseUrl": "https://streamwish.to",
-      "enabled": true,
+      "enabled": false,
       "priority": 28,
       "type": "EMBED",
       "requiresReferer": true,
@@ -356,7 +356,7 @@
     {
       "name": "DoodStream",
       "baseUrl": "https://dood.to",
-      "enabled": true,
+      "enabled": false,
       "priority": 30,
       "type": "EMBED",
       "requiresReferer": true,
@@ -373,7 +373,7 @@
     {
       "name": "FileMoon",
       "baseUrl": "https://filemoon.sx",
-      "enabled": true,
+      "enabled": false,
       "priority": 31,
       "type": "EMBED",
       "requiresReferer": true,

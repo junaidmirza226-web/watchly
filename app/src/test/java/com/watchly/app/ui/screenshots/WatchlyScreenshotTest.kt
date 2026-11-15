@@ -93,6 +93,7 @@ class WatchlyScreenshotTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
+        com.watchly.app.data.settings.TestKeys.clearEmbeddedDefaults()
         mockkObject(TvMazeApi)
         mockkObject(AniListApi)
         mockkObject(ArchiveApi)

@@ -1,16 +1,11 @@
 /*
- * Watchly — Home screen.
+ * Watchly — Flagship Home Screen.
  *
- * Improvement batch 1 (autonomous testing loop):
- *  - Hero section enlarged to 340dp (feels cinematic, not cramped)
- *  - Hero gradient extended to 60% opacity scrim for better text legibility
- *  - Shimmer skeleton loading replaces bare spinner (industry standard UX)
- *  - PlayabilityBadge removed from hero (cleaner, modern look)
- *  - Dead imports cleaned up (PlayabilityFilter, PlayabilityFilterBar, PlayabilityBadge)
- *  - "FEATURED" label styled with letter-spacing for premium feel
- *  - Hero overview hidden when null (no empty space)
- *  - Row heading "See All" affordance added per row (future tap target)
- *  - Bottom content padding increased to clear bottom nav bar
+ * Features:
+ *  - Widescreen HD Hero Showcase (uses 16:9 backdropUrl when available) + Watch Now CTA + indicators
+ *  - Live Continue Watching rail with gold progress bar & episode resume
+ *  - Regional & Global Cinema Quick-Jump Hubs (Bollywood, South Indian, Tollywood, Mollywood, Hollywood, etc.)
+ *  - Rich curated rows with live "See All" navigation into Multi-Filter Browse
  */
 package com.watchly.app.ui.home
 
@@ -21,6 +16,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,19 +28,25 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -70,13 +72,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.watchly.app.data.browse.BrowseSort
+import com.watchly.app.data.browse.INDUSTRIES
+import com.watchly.app.data.browse.Industry
 import com.watchly.app.data.model.MediaType
 import com.watchly.app.data.model.Title
+import com.watchly.app.data.playback.PlaybackProgress
+import com.watchly.app.ui.browse.BrowseKind
+import com.watchly.app.ui.browse.BrowsePreset
+import com.watchly.app.ui.browse.BrowsePresetStore
 import com.watchly.app.ui.components.PosterCard
 import com.watchly.app.ui.theme.WatchlyGold
 import com.watchly.app.ui.theme.WatchlyGoldLight
+import com.watchly.app.ui.theme.WatchlySurface
 import com.watchly.app.ui.theme.WatchlySurfaceVariant
 import com.watchly.app.ui.theme.WatchlyTheme
 import com.watchly.app.ui.theme.watchlyGoldButtonColors
@@ -88,7 +100,8 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     onTitleClick: (Title) -> Unit = {},
     onSearchClick: () -> Unit = {},
-    onTmdbClick: () -> Unit = {}
+    onTmdbClick: () -> Unit = {},
+    onOpenBrowseKind: (BrowseKind) -> Unit = {}
 ) {
     val context = LocalContext.current
     val viewModel: HomeViewModel = viewModel(
@@ -96,8 +109,9 @@ fun HomeScreen(
     )
     val state by viewModel.uiState.collectAsState()
 
-    // Pick up a TMDB key added/removed on the TMDB screen.
-    LaunchedEffect(Unit) { viewModel.refreshKeyState() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.refreshKeyState()
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
@@ -137,22 +151,25 @@ fun HomeScreen(
                 state = state,
                 onTitleClick = onTitleClick,
                 onRetry = viewModel::load,
-                onTmdbClick = onTmdbClick
+                onTmdbClick = onTmdbClick,
+                onOpenBrowsePreset = { preset ->
+                    BrowsePresetStore.offer(preset)
+                    onOpenBrowseKind(preset.kind)
+                },
+                onDismissContinueWatching = viewModel::removeFromContinueWatching
             )
         }
     }
 }
-
-// ---------------------------------------------------------------------
-// Content
-// ---------------------------------------------------------------------
 
 @Composable
 private fun HomeContent(
     state: HomeUiState,
     onTitleClick: (Title) -> Unit,
     onRetry: () -> Unit = {},
-    onTmdbClick: () -> Unit = {}
+    onTmdbClick: () -> Unit = {},
+    onOpenBrowsePreset: (BrowsePreset) -> Unit = {},
+    onDismissContinueWatching: (String) -> Unit = {}
 ) {
     val candidates = state.heroCandidates
     var heroIndex by remember { mutableIntStateOf(0) }
@@ -169,7 +186,7 @@ private fun HomeContent(
         onTitleClick(it)
     }
     val updateInfo by com.watchly.app.data.remote.AppUpdateChecker.updateState.collectAsState()
-    val localContext = androidx.compose.ui.platform.LocalContext.current
+    val localContext = LocalContext.current
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -178,10 +195,12 @@ private fun HomeContent(
     ) {
         updateInfo?.let { update ->
             item {
-                androidx.compose.material3.Surface(
+                Surface(
                     color = WatchlyGold.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth()
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier.padding(12.dp),
@@ -200,7 +219,12 @@ private fun HomeContent(
                             )
                         }
                         Button(
-                            onClick = { com.watchly.app.data.remote.AppUpdateChecker.triggerInstall(localContext, update.downloadUrl) },
+                            onClick = {
+                                com.watchly.app.data.remote.AppUpdateChecker.triggerInstall(
+                                    localContext,
+                                    update.downloadUrl
+                                )
+                            },
                             colors = watchlyGoldButtonColors()
                         ) {
                             Text("Update")
@@ -221,15 +245,49 @@ private fun HomeContent(
             }
         }
 
+        // 1. Widescreen Cinema Hero Showcase
         item {
             HeroSection(
                 hero = candidates.getOrNull(heroIndex % maxOf(heroCount, 1)),
+                activeIndex = heroIndex % maxOf(heroCount, 1),
+                totalCount = heroCount,
                 onClick = onHeroTitleClick
             )
         }
 
+        // 2. Cinema Quick-Jump Hubs (Bollywood, South Indian, Tollywood, Mollywood, Hollywood, etc.)
+        if (state.hasTmdbKey) {
+            item { Spacer(Modifier.height(16.dp)) }
+            item(key = "cinema-hubs-ribbon") {
+                CinemaHubsQuickBar(
+                    industries = INDUSTRIES,
+                    onSelectIndustry = { industry ->
+                        onOpenBrowsePreset(
+                            BrowsePreset(kind = BrowseKind.MOVIES, industry = industry)
+                        )
+                    }
+                )
+            }
+        }
+
+        // 3. Continue Watching (renders automatically when user has watched anything)
+        if (state.continueWatching.isNotEmpty()) {
+            item { Spacer(Modifier.height(22.dp)) }
+            item(key = "continue-watching-row") {
+                ContinueWatchingRow(
+                    items = state.continueWatching,
+                    onResumeClick = { progress ->
+                        val reconstructed = progress.toTitle()
+                        onHeroTitleClick(reconstructed)
+                    },
+                    onDismiss = onDismissContinueWatching
+                )
+            }
+        }
+
         item { Spacer(Modifier.height(24.dp)) }
 
+        // 4. Trending Movies
         item {
             TitleRow(
                 heading = "Trending Movies",
@@ -237,48 +295,62 @@ private fun HomeContent(
                 emptyMessage = "No movies available right now.",
                 onTitleClick = onHeroTitleClick,
                 failed = "Movies" in state.failedSections,
-                onRetry = onRetry
+                onRetry = onRetry,
+                onSeeAll = if (state.visibleMovies.isNotEmpty()) {
+                    { onOpenBrowsePreset(BrowsePreset(kind = BrowseKind.MOVIES)) }
+                } else null
             )
         }
 
-        state.visibleIndustryRows.firstOrNull { it.industry.languageCode == "hi" }?.let { row ->
-            item { Spacer(Modifier.height(24.dp)) }
-            item(key = "industry-hi") {
-                TitleRow(
-                    heading = "Bollywood Hits",
-                    titles = row.titles,
-                    emptyMessage = "",
-                    onTitleClick = onHeroTitleClick
-                )
-            }
-        }
-
-        state.visibleIndustryRows.firstOrNull { it.industry.languageCode == "te" }?.let { row ->
-            item { Spacer(Modifier.height(24.dp)) }
-            item(key = "industry-te") {
-                TitleRow(
-                    heading = "Tollywood & South Cinema",
-                    titles = row.titles,
-                    emptyMessage = "",
-                    onTitleClick = onHeroTitleClick
-                )
+        // 5. Spotlight Regional Cinema Rows right near the top!
+        val spotlightCodes = listOf("hi", "te|ta|ml|kn", "te", "ml", "ta", "en")
+        val spotlightHeadings = mapOf(
+            "hi" to "Bollywood Hits",
+            "te|ta|ml|kn" to "South Indian Blockbusters",
+            "te" to "Tollywood Cinema (Telugu)",
+            "ml" to "Mollywood Gems (Malayalam)",
+            "ta" to "Kollywood Action & Drama",
+            "en" to "Hollywood Blockbusters"
+        )
+        spotlightCodes.forEach { code ->
+            state.visibleIndustryRows.firstOrNull { it.industry.languageCode == code }?.let { row ->
+                item { Spacer(Modifier.height(24.dp)) }
+                item(key = "industry-$code") {
+                    TitleRow(
+                        heading = spotlightHeadings[code] ?: row.industry.label,
+                        titles = row.titles,
+                        emptyMessage = "",
+                        onTitleClick = onHeroTitleClick,
+                        onSeeAll = {
+                            onOpenBrowsePreset(
+                                BrowsePreset(kind = BrowseKind.MOVIES, industry = row.industry)
+                            )
+                        }
+                    )
+                }
             }
         }
 
         if (state.topRatedMovies.isNotEmpty()) {
             item { Spacer(Modifier.height(24.dp)) }
-            item {
+            item(key = "top-rated-movies") {
                 TitleRow(
                     heading = "Top Rated Movies",
                     titles = state.topRatedMovies,
                     emptyMessage = "",
-                    onTitleClick = onHeroTitleClick
+                    onTitleClick = onHeroTitleClick,
+                    onSeeAll = {
+                        onOpenBrowsePreset(
+                            BrowsePreset(kind = BrowseKind.MOVIES, sort = BrowseSort.TOP_RATED)
+                        )
+                    }
                 )
             }
         }
 
         item { Spacer(Modifier.height(24.dp)) }
 
+        // 6. Trending TV Shows
         item {
             TitleRow(
                 heading = "Trending TV Shows",
@@ -286,24 +358,33 @@ private fun HomeContent(
                 emptyMessage = "No shows available right now.",
                 onTitleClick = onHeroTitleClick,
                 failed = "TV shows" in state.failedSections,
-                onRetry = onRetry
+                onRetry = onRetry,
+                onSeeAll = if (state.visibleShows.isNotEmpty()) {
+                    { onOpenBrowsePreset(BrowsePreset(kind = BrowseKind.SHOWS)) }
+                } else null
             )
         }
 
         if (state.topRatedShows.isNotEmpty()) {
             item { Spacer(Modifier.height(24.dp)) }
-            item {
+            item(key = "top-rated-shows") {
                 TitleRow(
                     heading = "Top Rated TV Series",
                     titles = state.topRatedShows,
                     emptyMessage = "",
-                    onTitleClick = onHeroTitleClick
+                    onTitleClick = onHeroTitleClick,
+                    onSeeAll = {
+                        onOpenBrowsePreset(
+                            BrowsePreset(kind = BrowseKind.SHOWS, sort = BrowseSort.TOP_RATED)
+                        )
+                    }
                 )
             }
         }
 
         item { Spacer(Modifier.height(24.dp)) }
 
+        // 7. Trending Anime
         item {
             TitleRow(
                 heading = "Trending Anime",
@@ -311,21 +392,32 @@ private fun HomeContent(
                 emptyMessage = "No anime available right now.",
                 onTitleClick = onHeroTitleClick,
                 failed = "Anime" in state.failedSections,
-                onRetry = onRetry
+                onRetry = onRetry,
+                onSeeAll = if (state.visibleAnime.isNotEmpty()) {
+                    { onOpenBrowsePreset(BrowsePreset(kind = BrowseKind.ANIME)) }
+                } else null
             )
         }
 
-        state.visibleIndustryRows.filter { it.industry.languageCode !in listOf("hi", "te") }.forEach { row ->
-            item { Spacer(Modifier.height(24.dp)) }
-            item(key = "industry-${row.industry.languageCode}") {
-                TitleRow(
-                    heading = row.industry.label,
-                    titles = row.titles,
-                    emptyMessage = "",
-                    onTitleClick = onHeroTitleClick
-                )
+        // 8. Remaining Global & Regional Cinema Rows (Sandalwood, Punjabi, Pakistani & Urdu, Korean, Turkish, etc.)
+        state.visibleIndustryRows
+            .filter { it.industry.languageCode !in spotlightCodes }
+            .forEach { row ->
+                item { Spacer(Modifier.height(24.dp)) }
+                item(key = "industry-${row.industry.languageCode}") {
+                    TitleRow(
+                        heading = row.industry.label,
+                        titles = row.titles,
+                        emptyMessage = "",
+                        onTitleClick = onHeroTitleClick,
+                        onSeeAll = {
+                            onOpenBrowsePreset(
+                                BrowsePreset(kind = BrowseKind.MOVIES, industry = row.industry)
+                            )
+                        }
+                    )
+                }
             }
-        }
 
         state.visibleYoutubeRows.forEach { row ->
             item { Spacer(Modifier.height(24.dp)) }
@@ -375,14 +467,213 @@ private fun HomeContent(
 }
 
 @Composable
+private fun CinemaHubsQuickBar(
+    industries: List<Industry>,
+    onSelectIndustry: (Industry) -> Unit
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        items(industries, key = { it.languageCode }) { industry ->
+            Surface(
+                onClick = { onSelectIndustry(industry) },
+                shape = RoundedCornerShape(999.dp),
+                color = WatchlySurface,
+                modifier = Modifier
+                    .height(40.dp)
+                    .border(
+                        width = 1.dp,
+                        color = WatchlyGold.copy(alpha = 0.42f),
+                        shape = RoundedCornerShape(999.dp)
+                    )
+            ) {
+                Box(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = industry.label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = WatchlyGoldLight
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContinueWatchingRow(
+    items: List<PlaybackProgress>,
+    onResumeClick: (PlaybackProgress) -> Unit,
+    onDismiss: (String) -> Unit
+) {
+    Column {
+        Text(
+            text = "Continue Watching",
+            style = MaterialTheme.typography.headlineSmall,
+            color = WatchlyGold,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(Modifier.height(10.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(items, key = { it.key }) { item ->
+                val fraction = if (item.durationMs > 0L) {
+                    (item.positionMs.toFloat() / item.durationMs.toFloat()).coerceIn(0.05f, 0.98f)
+                } else 0.15f
+                Surface(
+                    onClick = { onResumeClick(item) },
+                    shape = RoundedCornerShape(14.dp),
+                    color = WatchlySurface,
+                    modifier = Modifier
+                        .width(220.dp)
+                        .border(1.dp, WatchlyGold.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
+                ) {
+                    Column {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(115.dp)
+                                .background(WatchlySurfaceVariant)
+                        ) {
+                            if (item.posterUrl != null) {
+                                AsyncImage(
+                                    model = item.posterUrl,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.35f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(WatchlyGold),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.PlayArrow,
+                                        contentDescription = null,
+                                        tint = Color(0xFF1A1405)
+                                    )
+                                }
+                            }
+                            IconButton(
+                                onClick = { onDismiss(item.key) },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Close,
+                                    contentDescription = "Remove ${item.titleName}",
+                                    tint = Color.White.copy(alpha = 0.85f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                        LinearProgressIndicator(
+                            progress = { fraction },
+                            color = WatchlyGold,
+                            trackColor = WatchlySurfaceVariant,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(3.dp)
+                        )
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = item.titleName,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = item.episodeLabel ?: "Resume Movie",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = WatchlyGoldLight,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun PlaybackProgress.toTitle(): Title {
+    val parts = key.split(":", limit = 2)
+    val prefix = parts.getOrNull(0)
+    val rawId = parts.getOrNull(1)
+    return when (prefix) {
+        "tmdb-movie", "tmdb-tv" -> Title(
+            tmdbId = rawId?.toIntOrNull(),
+            name = titleName,
+            posterUrl = posterUrl,
+            mediaType = mediaType
+        )
+        "imdb" -> Title(
+            imdbId = rawId,
+            name = titleName,
+            posterUrl = posterUrl,
+            mediaType = mediaType
+        )
+        "archive" -> Title(
+            archiveId = rawId,
+            name = titleName,
+            posterUrl = posterUrl,
+            mediaType = mediaType
+        )
+        "tvmaze" -> Title(
+            tvmazeId = rawId?.toIntOrNull(),
+            name = titleName,
+            posterUrl = posterUrl,
+            mediaType = mediaType
+        )
+        "anilist" -> Title(
+            anilistId = rawId?.toIntOrNull(),
+            name = titleName,
+            posterUrl = posterUrl,
+            mediaType = mediaType
+        )
+        "yt" -> Title(
+            youtubeId = rawId,
+            name = titleName,
+            posterUrl = posterUrl,
+            mediaType = mediaType
+        )
+        else -> Title(
+            name = titleName,
+            posterUrl = posterUrl,
+            mediaType = mediaType
+        )
+    }
+}
+
+@Composable
 private fun HeroSection(
     hero: Title?,
+    activeIndex: Int = 0,
+    totalCount: Int = 0,
     onClick: (Title) -> Unit
 ) {
+    val heroArtUrl = hero?.heroImageUrl
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(340.dp) // cinematic height (was 260dp)
+            .height(350.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .then(
                 if (hero != null) {
@@ -390,12 +681,12 @@ private fun HeroSection(
                 } else Modifier
             )
     ) {
-        var heroImageFailed by remember(hero?.posterUrl) {
+        var heroImageFailed by remember(heroArtUrl) {
             mutableStateOf(false)
         }
-        if (hero?.posterUrl != null && !heroImageFailed) {
+        if (heroArtUrl != null && !heroImageFailed) {
             AsyncImage(
-                model = hero.posterUrl,
+                model = heroArtUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 onError = { heroImageFailed = true },
@@ -403,15 +694,16 @@ private fun HeroSection(
             )
         }
 
-        // Deep gradient scrim — text readable on any poster
+        // Rich cinema gradient scrim
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colorStops = arrayOf(
-                            0.0f to Color.Transparent,
-                            0.45f to Color.Transparent,
+                            0.0f to Color.Black.copy(alpha = 0.18f),
+                            0.42f to Color.Black.copy(alpha = 0.25f),
+                            0.78f to MaterialTheme.colorScheme.background.copy(alpha = 0.88f),
                             1.0f to MaterialTheme.colorScheme.background
                         )
                     )
@@ -421,17 +713,35 @@ private fun HeroSection(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = 16.dp, end = 16.dp, bottom = 20.dp)
+                .padding(start = 16.dp, end = 16.dp, bottom = 18.dp)
         ) {
-            // "FEATURED" label with premium letter-spacing
-            Text(
-                text = "FEATURED",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    letterSpacing = 2.sp,
-                    fontWeight = FontWeight.Bold
-                ),
-                color = WatchlyGold
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "FEATURED",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        letterSpacing = 2.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = WatchlyGold
+                )
+                hero?.languageBadge?.let { badge ->
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(WatchlyGold.copy(alpha = 0.20f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = badge,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = WatchlyGoldLight
+                        )
+                    }
+                }
+            }
             Spacer(Modifier.height(6.dp))
             Text(
                 text = hero?.name ?: "Your next obsession awaits",
@@ -450,26 +760,72 @@ private fun HeroSection(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            // Year + rating row
-            if (hero?.year != null || hero?.rating != null) {
-                Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (hero != null) {
+                        Surface(
+                            onClick = { onClick(hero) },
+                            shape = RoundedCornerShape(999.dp),
+                            color = WatchlyGold
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.PlayArrow,
+                                    contentDescription = null,
+                                    tint = Color(0xFF1A1405),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = "Watch Now",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1A1405)
+                                )
+                            }
+                        }
+                    }
                     hero?.year?.let {
                         Text(
                             text = it,
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelMedium,
                             color = WatchlyGoldLight
                         )
                     }
-                    hero?.rating?.let {
+                    hero?.rating?.takeIf { it > 0.0 }?.let {
                         Text(
                             text = "★ ${"%.1f".format(it)}",
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelMedium,
                             color = WatchlyGold
                         )
+                    }
+                }
+
+                if (totalCount > 1) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        repeat(totalCount) { idx ->
+                            Box(
+                                modifier = Modifier
+                                    .height(5.dp)
+                                    .width(if (idx == activeIndex) 16.dp else 5.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (idx == activeIndex) WatchlyGold
+                                        else Color.White.copy(alpha = 0.35f)
+                                    )
+                            )
+                        }
                     }
                 }
             }
@@ -484,10 +840,10 @@ private fun TitleRow(
     emptyMessage: String,
     onTitleClick: (Title) -> Unit,
     failed: Boolean = false,
-    onRetry: () -> Unit = {}
+    onRetry: () -> Unit = {},
+    onSeeAll: (() -> Unit)? = null
 ) {
     Column {
-        // Row heading with optional "See All" (future-ready)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -498,10 +854,23 @@ private fun TitleRow(
             Text(
                 text = heading,
                 style = MaterialTheme.typography.headlineSmall,
-                color = WatchlyGold
+                color = WatchlyGold,
+                modifier = Modifier.weight(1f)
             )
+            if (onSeeAll != null && titles.isNotEmpty()) {
+                TextButton(
+                    onClick = onSeeAll,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) {
+                    Text(
+                        text = "Explore →",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = WatchlyGoldLight
+                    )
+                }
+            }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
         if (titles.isEmpty() && failed) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -541,10 +910,6 @@ private fun TitleRow(
     }
 }
 
-// ---------------------------------------------------------------------
-// Shimmer skeleton loading (industry standard UX for streaming apps)
-// ---------------------------------------------------------------------
-
 @Composable
 private fun HomeShimmerLoading() {
     val transition = rememberInfiniteTransition(label = "shimmer")
@@ -572,19 +937,15 @@ private fun HomeShimmerLoading() {
         contentPadding = PaddingValues(bottom = 88.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
-        // Hero skeleton
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(340.dp)
+                    .height(350.dp)
                     .background(shimmerBrush)
             )
         }
-
         item { Spacer(Modifier.height(24.dp)) }
-
-        // Two rows of poster skeletons
         repeat(2) {
             item {
                 Column {
@@ -663,7 +1024,6 @@ private fun HomeError(
     }
 }
 
-/** Kept for callers that still reference TmdbUnlockCard. */
 @Composable
 internal fun TmdbUnlockCard(
     onClick: () -> Unit,
@@ -699,10 +1059,6 @@ internal fun TmdbUnlockCard(
         }
     }
 }
-
-// ---------------------------------------------------------------------
-// Preview
-// ---------------------------------------------------------------------
 
 @Preview(showBackground = true, backgroundColor = 0xFF070707)
 @Composable

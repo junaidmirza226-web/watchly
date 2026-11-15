@@ -96,6 +96,23 @@ fun PosterCard(
                         color = WatchlyGold
                     )
                 }
+                val langBadge = title.languageBadge
+                if (langBadge != null && title.originalLanguage?.lowercase() != "en") {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.78f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = langBadge,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = WatchlyGoldLight
+                        )
+                    }
+                }
             }
             Column(Modifier.padding(8.dp)) {
                 Text(

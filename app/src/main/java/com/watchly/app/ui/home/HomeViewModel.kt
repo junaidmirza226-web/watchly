@@ -1,11 +1,12 @@
 /*
  * Watchly — Home screen state holder.
  *
- * Modern MovieBox-grade home state:
- * - Cinemeta API for keyless global trending blockbusters & top rated movies/shows
- * - TMDB API integration with master key (Bollywood, Tollywood, Punjabi, etc.)
- * - TVmaze and AniList for shows and anime
- * - Resilient silent fallbacks and zero dead rows
+ * Flagship streaming home state:
+ * - TMDB API integration for global blockbusters, Top Rated, and 14 regional cinema hubs
+ *   (Bollywood, South Indian, Tollywood, Kollywood, Mollywood, Sandalwood, Hollywood,
+ *    Punjabi, Pakistani & Urdu, Bengali, Korean, Turkish, Japanese, Spanish)
+ * - Resilient fallbacks to Archive / TVmaze / AniList / Cinemeta
+ * - Live Continue Watching integration
  */
 package com.watchly.app.ui.home
 
@@ -20,6 +21,8 @@ import com.watchly.app.data.model.PlayabilityFilter
 import com.watchly.app.data.model.Title
 import com.watchly.app.data.model.filteredBy
 import com.watchly.app.data.model.playability
+import com.watchly.app.data.playback.PlaybackProgress
+import com.watchly.app.data.playback.PlaybackRepository
 import com.watchly.app.data.remote.AniListApi
 import com.watchly.app.data.remote.ArchiveApi
 import com.watchly.app.data.remote.CinemetaApi
@@ -48,12 +51,13 @@ data class NamedTitleRow(
 /** Immutable UI state for HomeScreen. */
 data class HomeUiState(
     val isLoading: Boolean = true,
+    val continueWatching: List<PlaybackProgress> = emptyList(),
     val movies: List<Title> = emptyList(),
     val topRatedMovies: List<Title> = emptyList(),
     val shows: List<Title> = emptyList(),
     val topRatedShows: List<Title> = emptyList(),
     val anime: List<Title> = emptyList(),
-    /** Per-industry TMDB rows (Bollywood, Tollywood, Punjabi, etc.). */
+    /** Per-industry TMDB rows (Bollywood, South Indian, Tollywood, Mollywood, Hollywood, etc.). */
     val industryRows: List<IndustryRow> = emptyList(),
     val youtubeRows: List<NamedTitleRow> = emptyList(),
     val archiveRows: List<NamedTitleRow> = emptyList(),
@@ -88,18 +92,27 @@ data class HomeUiState(
         get() = heroCandidates.firstOrNull()
 
     /**
-     * Modern blockbuster titles with posters for the rotating hero banner.
+     * Featured titles with artwork for the rotating widescreen hero banner.
+     * Playable titles always lead ahead of info-only catalogue items.
      */
     val heroCandidates: List<Title>
         get() {
-            val bollywoodTitles = industryRows.firstOrNull { it.industry.languageCode == "hi" }?.titles ?: emptyList()
-            val candidates = (visibleMovies + bollywoodTitles + visibleShows + visibleAnime)
+            val bollywoodTitles = industryRows
+                .firstOrNull { it.industry.languageCode == "hi" }
+                ?.titles
+                .orEmpty()
+            val southTitles = industryRows
+                .firstOrNull { it.industry.languageCode == "te|ta|ml|kn" }
+                ?.titles
+                .orEmpty()
+            val candidates = (visibleMovies + bollywoodTitles.take(2) + southTitles.take(2) + visibleShows + visibleAnime)
+                .distinctBy { it.stableKey }
             return candidates
                 .sortedBy {
                     if (it.playability() == Playability.PLAYABLE) 0 else 1
                 }
-                .filter { it.posterUrl != null }
-                .take(6)
+                .filter { it.heroImageUrl != null }
+                .take(7)
         }
 
     val isEmpty: Boolean
@@ -112,13 +125,15 @@ data class HomeUiState(
 class HomeViewModel(
     private val tmdbKeys: TmdbKeyRepository? = null,
     private val providerKeys: ProviderKeysRepository? = null,
-    private val uiPrefs: UiPreferencesRepository? = null
+    private val uiPrefs: UiPreferencesRepository? = null,
+    private val playback: PlaybackRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
         HomeUiState(
             playabilityFilter = uiPrefs?.playabilityFilter()
-                ?: PlayabilityFilter.ALL
+                ?: PlayabilityFilter.ALL,
+            continueWatching = playback?.getContinueWatching().orEmpty()
         )
     )
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -133,7 +148,20 @@ class HomeViewModel(
         _uiState.update { it.copy(playabilityFilter = filter) }
     }
 
+    fun refreshContinueWatching() {
+        val cw = playback?.getContinueWatching().orEmpty()
+        if (cw != _uiState.value.continueWatching) {
+            _uiState.update { it.copy(continueWatching = cw) }
+        }
+    }
+
+    fun removeFromContinueWatching(key: String) {
+        playback?.clearProgress(key)
+        refreshContinueWatching()
+    }
+
     fun refreshKeyState() {
+        refreshContinueWatching()
         val persisted = uiPrefs?.playabilityFilter()
         if (persisted != null && persisted != _uiState.value.playabilityFilter) {
             _uiState.update { it.copy(playabilityFilter = persisted) }
@@ -152,56 +180,69 @@ class HomeViewModel(
 
     fun load() {
         _uiState.update {
-            it.copy(isLoading = true, errorMessage = null, failedSections = emptySet())
+            it.copy(
+                isLoading = true,
+                errorMessage = null,
+                failedSections = emptySet(),
+                continueWatching = playback?.getContinueWatching().orEmpty()
+            )
         }
         viewModelScope.launch {
-            val effectiveApiKey = tmdbKeys?.getKey() ?: TmdbKeyRepository.DEFAULT_TMDB_API_KEY
-            val hasKey = tmdbKeys?.hasKey() == true || effectiveApiKey.isNotBlank()
+            val apiKey = tmdbKeys?.getKey()
+            val hasKey = !apiKey.isNullOrBlank()
             _uiState.update { it.copy(hasTmdbKey = hasKey) }
 
-            // 1. Trending Movies: TMDB -> Cinemeta -> Archive
+            // 1. Trending Movies: TMDB (when key active) -> Archive (or Cinemeta rescue if TMDB active & Archive empty)
             val moviesDeferred = async {
                 runCatching {
-                    val tmdb = if (hasKey) {
-                        runCatching { TmdbApi.fetchTrendingMovies(effectiveApiKey) }.getOrNull()
+                    val tmdb = if (hasKey && apiKey != null) {
+                        runCatching { TmdbApi.fetchTrendingMovies(apiKey) }.getOrNull()
                     } else null
-                    if (!tmdb.isNullOrEmpty()) tmdb else {
-                        val cinemeta = runCatching { CinemetaApi.fetchTrendingMovies() }.getOrNull()
-                        if (!cinemeta.isNullOrEmpty()) cinemeta else ArchiveApi.fetchMoviesPage(page = 1, perPage = 20)
+                    if (!tmdb.isNullOrEmpty()) {
+                        tmdb
+                    } else {
+                        val archive = ArchiveApi.fetchMoviesPage(page = 1, perPage = 20)
+                        if (archive.isNotEmpty() || !hasKey) {
+                            archive
+                        } else {
+                            runCatching { CinemetaApi.fetchTrendingMovies() }
+                                .getOrDefault(archive)
+                        }
                     }
                 }
             }
 
-            // 2. Top Rated Movies: TMDB -> Cinemeta
+            // 2. Top Rated Movies (only when TMDB key is active)
             val topRatedMoviesDeferred = async {
-                runCatching {
-                    val tmdb = if (hasKey) {
-                        runCatching { TmdbApi.fetchTopRatedMovies(effectiveApiKey) }.getOrNull()
-                    } else null
-                    if (!tmdb.isNullOrEmpty()) tmdb else CinemetaApi.fetchTopRatedMovies()
+                if (hasKey && apiKey != null) {
+                    runCatching { TmdbApi.fetchTopRatedMovies(apiKey) }
+                        .getOrDefault(emptyList())
+                } else {
+                    emptyList()
                 }
             }
 
-            // 3. Trending TV Shows: TMDB -> Cinemeta -> TVmaze
+            // 3. Trending TV Shows: TMDB (when key active) -> TVmaze
             val showsDeferred = async {
                 runCatching {
-                    val tmdb = if (hasKey) {
-                        runCatching { TmdbApi.fetchTrendingTv(effectiveApiKey) }.getOrNull()
+                    val tmdb = if (hasKey && apiKey != null) {
+                        runCatching { TmdbApi.fetchTrendingTv(apiKey) }.getOrNull()
                     } else null
-                    if (!tmdb.isNullOrEmpty()) tmdb else {
-                        val cinemeta = runCatching { CinemetaApi.fetchTrendingShows() }.getOrNull()
-                        if (!cinemeta.isNullOrEmpty()) cinemeta else TvMazeApi.fetchTrendingShows()
+                    if (!tmdb.isNullOrEmpty()) {
+                        tmdb
+                    } else {
+                        TvMazeApi.fetchTrendingShows()
                     }
                 }
             }
 
-            // 4. Top Rated TV Shows: TMDB -> Cinemeta
+            // 4. Top Rated TV Shows (only when TMDB key is active)
             val topRatedShowsDeferred = async {
-                runCatching {
-                    val tmdb = if (hasKey) {
-                        runCatching { TmdbApi.fetchTopRatedTv(effectiveApiKey) }.getOrNull()
-                    } else null
-                    if (!tmdb.isNullOrEmpty()) tmdb else CinemetaApi.fetchTopRatedShows()
+                if (hasKey && apiKey != null) {
+                    runCatching { TmdbApi.fetchTopRatedTv(apiKey) }
+                        .getOrDefault(emptyList())
+                } else {
+                    emptyList()
                 }
             }
 
@@ -209,9 +250,9 @@ class HomeViewModel(
             val animeDeferred = async { runCatching { AniListApi.fetchTrendingAnime() } }
 
             val moviesResult = moviesDeferred.await()
-            val topRatedMoviesResult = topRatedMoviesDeferred.await()
+            val topRatedMovies = topRatedMoviesDeferred.await()
             val showsResult = showsDeferred.await()
-            val topRatedShowsResult = topRatedShowsDeferred.await()
+            val topRatedShows = topRatedShowsDeferred.await()
             val animeResult = animeDeferred.await()
 
             val failures = listOfNotNull(
@@ -224,24 +265,24 @@ class HomeViewModel(
                 it.copy(
                     isLoading = false,
                     movies = moviesResult.getOrDefault(emptyList()),
-                    topRatedMovies = topRatedMoviesResult.getOrDefault(emptyList()),
+                    topRatedMovies = topRatedMovies,
                     shows = showsResult.getOrDefault(emptyList()),
-                    topRatedShows = topRatedShowsResult.getOrDefault(emptyList()),
+                    topRatedShows = topRatedShows,
                     anime = animeResult.getOrDefault(emptyList()),
                     failedSections = failures.toSet(),
                     errorMessage = when {
                         failures.size == 3 ->
-                            "Couldn't load content."
+                            "Couldn't load content. Check your connection and try again."
                         failures.size == 1 ->
-                            "Couldn't load ${failures.first()}. Showing what loaded."
+                            "Couldn't load ${failures.first()}. Showing what we could fetch."
                         failures.size == 2 ->
-                            "Couldn't load ${failures.joinToString(" and ")}. Showing what loaded."
+                            "Couldn't load ${failures.joinToString(" and ")}. Showing what we could fetch."
                         else -> null
                     }
                 )
             }
 
-            // YouTube Channels (curated)
+            // Curated YouTube Channels
             val channels = runCatching { YouTubeApi.CHANNELS }
                 .getOrDefault(emptyList())
             val youtubeRows = channels.map { channel ->
@@ -256,6 +297,21 @@ class HomeViewModel(
                 )
             }.filter { it.titles.isNotEmpty() }
             _uiState.update { it.copy(youtubeRows = youtubeRows) }
+
+            // Curated Internet Archive collections
+            val archiveRows = ArchiveApi.COLLECTIONS.map { collection ->
+                async {
+                    runCatching {
+                        ArchiveApi.fetchCollectionPage(collection, page = 1, perPage = 15)
+                    }.getOrDefault(emptyList())
+                }
+            }.mapIndexed { index, deferred ->
+                NamedTitleRow(
+                    heading = ArchiveApi.COLLECTIONS[index].displayName,
+                    titles = deferred.await()
+                )
+            }.filter { it.titles.isNotEmpty() }
+            _uiState.update { it.copy(archiveRows = archiveRows) }
 
             // Trakt Trending
             val traktClientId = runCatching {
@@ -273,16 +329,24 @@ class HomeViewModel(
             }
             _uiState.update { it.copy(traktRow = traktRow) }
 
-            // Industry rows (Bollywood, Tollywood, Punjabi, Kollywood, etc.)
-            if (hasKey) {
+            // Regional & Global Cinema rows (Bollywood, Hollywood, South Indian, Tollywood, Mollywood, Kollywood, Punjabi, Pakistani, Korean, etc.)
+            if (hasKey && apiKey != null) {
                 val rows = INDUSTRIES.map { industry ->
                     async {
                         runCatching {
-                            TmdbApi.discoverMovies(
-                                apiKey = effectiveApiKey,
-                                language = industry.languageCode,
-                                page = 1
-                            ).take(INDUSTRY_ROW_SIZE)
+                            if (industry.languageCode.contains("|")) {
+                                TmdbApi.discoverMoviesAdvanced(
+                                    apiKey = apiKey,
+                                    languageQuery = industry.languageCode,
+                                    page = 1
+                                ).take(INDUSTRY_ROW_SIZE)
+                            } else {
+                                TmdbApi.discoverMovies(
+                                    apiKey = apiKey,
+                                    language = industry.languageCode,
+                                    page = 1
+                                ).take(INDUSTRY_ROW_SIZE)
+                            }
                         }.getOrDefault(emptyList())
                     }
                 }.mapIndexed { index, deferred ->
@@ -311,10 +375,12 @@ class HomeViewModelFactory(
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(HomeViewModel::class.java)) {
+            val app = context.applicationContext
             return HomeViewModel(
-                TmdbKeyRepository(context.applicationContext),
-                ProviderKeysRepository(context.applicationContext),
-                UiPreferencesRepository(context.applicationContext)
+                tmdbKeys = TmdbKeyRepository(app),
+                providerKeys = ProviderKeysRepository(app),
+                uiPrefs = UiPreferencesRepository(app),
+                playback = PlaybackRepository(app)
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")

@@ -87,6 +87,8 @@ data class PlayerUiState(
      */
     val youtubeVideoId: String? = null,
     val webEmbedUrl: String? = null,
+    /** Available cloud embed servers for 1-tap server switching. */
+    val embedServers: List<PlayableFile> = emptyList(),
     /** Subtitle picker is open (cycle 4, OpenSubtitles). */
     val subtitlesOpen: Boolean = false,
     /** A subtitle search/download is in flight. */
@@ -220,33 +222,81 @@ class PlayerViewModel(
         // screen; there is no Media3 source to start.
         if (request.youtubeVideoId != null) return
         if (request.files.isEmpty()) {
+            val seasonEp = PlayableSourceResolver.parseSeasonEpisode(request.episodeLabel)
+            val season = seasonEp?.first
+            val episode = seasonEp?.second
+
+            // Fast-path (<50ms): if this is a TMDB/IMDb cloud title (and not a local/Archive file),
+            // build the instant server list immediately so video opens with zero multi-second stall!
+            if (request.title.archiveId == null &&
+                request.title.localUri == null &&
+                (request.title.tmdbId != null || request.title.imdbId != null)
+            ) {
+                val instantServers = com.watchly.app.data.remote.providers.StreamAggregator
+                    .getInstantEmbedServers(
+                        title = request.title,
+                        season = season,
+                        episode = episode,
+                        context = appContext
+                    )
+                    .map { s ->
+                        PlayableFile(
+                            url = s.url,
+                            fileName = "${request.title.name} (${s.providerName})",
+                            format = "EMBED",
+                            qualityLabel = s.providerName,
+                            headers = s.headers
+                        )
+                    }
+                if (instantServers.isNotEmpty()) {
+                    val chosenUrl = request.preferredEmbedUrl
+                        ?.takeIf { pref -> instantServers.any { it.url == pref } }
+                        ?: instantServers.first().url
+                    _uiState.update {
+                        it.copy(
+                            webEmbedUrl = chosenUrl,
+                            embedServers = instantServers,
+                            files = instantServers,
+                            isBuffering = false,
+                            errorMessage = null
+                        )
+                    }
+                    recordCloudStreamProgress(request.title, request.episodeLabel)
+                    return
+                }
+            }
+
             _uiState.update { it.copy(isBuffering = true, errorMessage = null) }
             viewModelScope.launch {
-                val seasonEpisodeMatch = request.episodeLabel?.let {
-                    Regex("""[sS](d+)s*[:eE](d+)""").find(it)
-                }
-                val season = seasonEpisodeMatch?.groupValues?.getOrNull(1)?.toIntOrNull()
-                val episode = seasonEpisodeMatch?.groupValues?.getOrNull(2)?.toIntOrNull()
-
                 val resolved = PlayableSourceResolver.resolve(
                     request.title,
                     com.watchly.app.data.downloads.DownloadsRepository(appContext),
                     season = season,
                     episode = episode
                 )
-                if (resolved.files.isNotEmpty()) {
-                    val directFile = resolved.files.firstOrNull { it.format != "EMBED" }
-                    if (directFile != null) {
-                        _uiState.update { it.copy(files = resolved.files, isBuffering = false) }
-                        startWithFiles(resolved.files)
-                    } else if (resolved.webEmbedUrl != null) {
-                        _uiState.update { it.copy(webEmbedUrl = resolved.webEmbedUrl, isBuffering = false) }
-                    } else {
-                        _uiState.update { it.copy(files = resolved.files, isBuffering = false) }
-                        startWithFiles(resolved.files)
+                val embeds = resolved.files.filter { it.format == "EMBED" }
+                val directFiles = resolved.files.filter { it.format != "EMBED" }
+
+                if (directFiles.isNotEmpty() && request.preferredEmbedUrl == null) {
+                    _uiState.update {
+                        it.copy(
+                            files = directFiles,
+                            embedServers = embeds,
+                            isBuffering = false
+                        )
                     }
-                } else if (resolved.webEmbedUrl != null) {
-                    _uiState.update { it.copy(webEmbedUrl = resolved.webEmbedUrl, isBuffering = false) }
+                    startWithFiles(directFiles)
+                } else if (resolved.webEmbedUrl != null || request.preferredEmbedUrl != null) {
+                    val activeEmbed = request.preferredEmbedUrl ?: resolved.webEmbedUrl
+                    _uiState.update {
+                        it.copy(
+                            webEmbedUrl = activeEmbed,
+                            embedServers = embeds,
+                            files = resolved.files,
+                            isBuffering = false
+                        )
+                    }
+                    recordCloudStreamProgress(request.title, request.episodeLabel)
                 } else if (resolved.youtubeVideoId != null) {
                     _uiState.update { it.copy(youtubeVideoId = resolved.youtubeVideoId, isBuffering = false) }
                 } else {
@@ -261,6 +311,105 @@ class PlayerViewModel(
             return
         }
         startWithFiles(request.files)
+    }
+
+    /** Switches the active cloud server in 1 tap without leaving fullscreen. */
+    fun selectWebServer(server: PlayableFile) {
+        _uiState.update {
+            it.copy(
+                webEmbedUrl = server.url,
+                errorMessage = null
+            )
+        }
+    }
+
+    /**
+     * Promotes a live .m3u8 / .mp4 stream intercepted by [WebStreamPlayerLayout]
+     * directly into Watchly's native Media3 ExoPlayer (unlocking 40+ language
+     * OpenSubtitles, swipe gestures, 2x hold-speed, PiP, and Offline Download).
+     */
+    fun promoteSniffedDirectStream(url: String, headers: Map<String, String>) {
+        val state = _uiState.value
+        val isHls = url.contains(".m3u8", ignoreCase = true)
+        val directFile = PlayableFile(
+            url = url,
+            fileName = "${state.title.name}${state.episodeLabel?.let { " - $it" } ?: ""}.${if (isHls) "m3u8" else "mp4"}",
+            format = if (isHls) "HLS" else "MP4",
+            qualityLabel = "Direct HD",
+            headers = headers
+        )
+        com.watchly.app.data.model.PlayableMediaHeaders.register(url, headers)
+        val directList = listOf(directFile) + state.files.filter { it.format != "EMBED" && it.url != url }
+        _uiState.update {
+            it.copy(
+                webEmbedUrl = null,
+                files = directList,
+                fileIndex = 0,
+                errorMessage = null
+            )
+        }
+        startWithFiles(directList)
+    }
+
+    /** Advances to the next episode while watching a cloud web stream. */
+    fun skipToNextWebEpisode() {
+        val nextItem = remainingQueue.firstOrNull() ?: return
+        remainingQueue = remainingQueue.drop(1)
+        val seasonEp = PlayableSourceResolver.parseSeasonEpisode(nextItem.episodeLabel)
+        val servers = com.watchly.app.data.remote.providers.StreamAggregator
+            .getInstantEmbedServers(
+                title = nextItem.title,
+                season = seasonEp?.first,
+                episode = seasonEp?.second,
+                context = appContext
+            )
+            .map { s ->
+                PlayableFile(
+                    url = s.url,
+                    fileName = "${nextItem.title.name} (${s.providerName})",
+                    format = "EMBED",
+                    qualityLabel = s.providerName,
+                    headers = s.headers
+                )
+            }
+        if (servers.isNotEmpty()) {
+            _uiState.update {
+                it.copy(
+                    title = nextItem.title,
+                    episodeLabel = nextItem.episodeLabel,
+                    webEmbedUrl = servers.first().url,
+                    embedServers = servers,
+                    files = servers,
+                    upNextQueueSize = remainingQueue.size,
+                    errorMessage = null
+                )
+            }
+            recordCloudStreamProgress(nextItem.title, nextItem.episodeLabel)
+        } else {
+            skipToNext()
+        }
+    }
+
+    private fun recordCloudStreamProgress(title: Title, episodeLabel: String?) {
+        runCatching {
+            val existing = playback.getProgress(title.stableKey)
+            // Record a sensible mid-stream marker (15% of 2h if brand new) so
+            // Continue Watching on Home & Library surfaces the movie / exact episode!
+            val pos = existing?.positionMs?.takeIf { it > 0L } ?: 900_000L
+            val dur = existing?.durationMs?.takeIf { it > 0L } ?: 7_200_000L
+            playback.saveProgress(
+                PlaybackProgress(
+                    key = title.stableKey,
+                    titleName = title.name,
+                    posterUrl = title.posterUrl,
+                    mediaType = title.mediaType,
+                    episodeLabel = episodeLabel,
+                    positionMs = pos,
+                    durationMs = dur,
+                    updatedAtMs = System.currentTimeMillis()
+                )
+            )
+        }
     }
 
     private fun startWithFiles(files: List<PlayableFile>) {
@@ -809,11 +958,16 @@ class PlayerViewModel(
         activeSubtitle = null
         audioChoiceApplied = false
         val youtubeId = resolved.youtubeVideoId
+        val embeds = resolved.files.filter { it.format == "EMBED" }
+        val directFiles = resolved.files.filter { it.format != "EMBED" }
+        val nextEmbedUrl = if (directFiles.isEmpty()) resolved.webEmbedUrl else null
         _uiState.update {
             it.copy(
                 title = item.title,
                 episodeLabel = item.episodeLabel,
-                files = resolved.files,
+                files = if (directFiles.isNotEmpty()) directFiles else resolved.files,
+                embedServers = embeds,
+                webEmbedUrl = nextEmbedUrl,
                 fileIndex = 0,
                 isPlaying = false,
                 positionMs = 0L,
@@ -834,7 +988,7 @@ class PlayerViewModel(
                 upNextSecondsLeft = 0
             )
         }
-        if (youtubeId == null && resolved.files.isNotEmpty()) {
+        if (youtubeId == null && nextEmbedUrl == null && directFiles.isNotEmpty()) {
             val activeEngine = engine ?: engineFactory(appContext).also { created ->
                 engine = created
                 viewModelScope.launch {
@@ -851,9 +1005,12 @@ class PlayerViewModel(
                 }
             }
             activeEngine.setSpeed(_uiState.value.speed)
-            activeEngine.setSource(resolved.files.first().url)
+            activeEngine.setSource(directFiles.first().url, directFiles.first().headers)
             activeEngine.setNowPlaying(item.title.name, item.episodeLabel)
             activeEngine.play()
+        } else if (nextEmbedUrl != null) {
+            engine?.pause()
+            recordCloudStreamProgress(item.title, item.episodeLabel)
         }
         pushSessionState()
     }

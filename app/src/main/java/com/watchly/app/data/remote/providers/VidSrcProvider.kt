@@ -12,10 +12,9 @@ import kotlinx.coroutines.withContext
  */
 class VidSrcProvider(
     private val baseUrl: String = "https://vidsrc.to",
-    override val priority: Int = 1
-) : StreamProvider {
-
+    override val priority: Int = 1,
     override val name: String = "VidSrc"
+) : StreamProvider {
 
     override suspend fun getStreams(
         tmdbId: Int?,

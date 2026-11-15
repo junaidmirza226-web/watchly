@@ -64,6 +64,10 @@ data class TitleDetailsUiState(
     /** Season number -> episodes, in air order. Empty for movies/anime. */
     val episodesBySeason: Map<Int, List<Episode>> = emptyMap(),
     val selectedSeason: Int? = null,
+    val isSeasonLoading: Boolean = false,
+    /** Instant cloud embed servers available for 1-tap selection. */
+    val cloudServers: List<PlayableFile> = emptyList(),
+    val selectedServerUrl: String? = null,
     val cast: List<CastMember> = emptyList(),
     /**
      * Official services offering this title (TMDB where-to-watch).
@@ -166,9 +170,17 @@ data class TitleDetailsUiState(
             return episodesBySeason[season].orEmpty()
         }
 
-    /** True when the title has something playable right now (including cloud streams). */
+    /** True when the title has direct playable files / YouTube / local media. */
     val hasPlayableSource: Boolean
-        get() = playableFiles.isNotEmpty() || title.tmdbId != null || title.imdbId != null || title.youtubeId != null || title.localUri != null || title.name.isNotBlank()
+        get() = playableFiles.isNotEmpty() || title.youtubeId != null || title.localUri != null
+
+    /** True when Watchly's multi-server cloud network can stream this title. */
+    val hasCloudStreamSource: Boolean
+        get() = cloudServers.isNotEmpty() || title.tmdbId != null || title.imdbId != null
+
+    /** True when either direct files, cloud servers, or YouTube can play in-app. */
+    val canStreamInApp: Boolean
+        get() = hasPlayableSource || hasCloudStreamSource
 
     /**
      * Badge truth for the details page — ONE source of truth, the
@@ -231,6 +243,8 @@ internal fun mergeFillMissing(base: Title, extra: Title): Title = base.copy(
     tmdbId = base.tmdbId ?: extra.tmdbId,
     imdbId = base.imdbId ?: extra.imdbId,
     posterUrl = base.posterUrl ?: extra.posterUrl,
+    backdropUrl = base.backdropUrl ?: extra.backdropUrl,
+    originalLanguage = base.originalLanguage ?: extra.originalLanguage,
     overview = base.overview ?: extra.overview,
     year = base.year ?: extra.year,
     rating = base.rating ?: extra.rating,
@@ -312,10 +326,13 @@ class TitleDetailsViewModel(
                             externalIdCache?.putTmdbId(imdbId, found)
                         }
                 }
-                // (b) Name + year search (Archive titles have no
-                // IMDb id here): the match's poster fills the page,
-                // and its id unlocks providers/details below.
-                if (effectiveTmdbId == null) {
+                // (b) Name + year search for real provider-sourced titles
+                // (Archive / TVmaze / AniList) lacking an IMDb id. Bare
+                // synthetic fixtures with no provider ids stay offline.
+                val hasExternalProviderId = title.archiveId != null ||
+                    title.tvmazeId != null ||
+                    title.anilistId != null
+                if (effectiveTmdbId == null && hasExternalProviderId) {
                     searchMatch = runCatching {
                         TmdbApi.searchMulti(apiKey, title.name)
                     }.getOrNull()?.let { results ->
@@ -337,20 +354,14 @@ class TitleDetailsViewModel(
             val files = title.archiveId?.let { id ->
                 async { runCatching { ArchiveApi.fetchPlayableFiles(id) } }
             }
-            // TMDB enrichment, only with the user's key. The
-            // DETAILS endpoint used here is movie-only, so it runs
-            // for movies; TV/anime titles get watch providers
-            // (type-aware) through the same id instead of a
-            // guaranteed-404 details call. CAST is type-aware
-            // since cycle 11: a TMDB-sourced show's cast comes
-            // from /tv/:id/credits, carrying the TMDB person ids
-            // the person pages (§3.3) open from. (A TVmaze cast,
-            // when the title has one, still wins — it is the
-            // source's own cast; its rows carry no TMDB ids and
-            // stay inert on the page.)
             val isMovie = title.mediaType == MediaType.MOVIE
             val tmdbDetails = if (effectiveTmdbId != null && apiKey != null && isMovie) {
                 async { runCatching { TmdbApi.fetchMovieDetails(apiKey, effectiveTmdbId) } }
+            } else {
+                null
+            }
+            val tmdbTvBundle = if (effectiveTmdbId != null && apiKey != null && !isMovie) {
+                async { runCatching { TmdbApi.fetchTvDetails(apiKey, effectiveTmdbId) } }
             } else {
                 null
             }
@@ -420,31 +431,56 @@ class TitleDetailsViewModel(
             // what the title already has.
             searchMatch?.let { enriched = mergeFillMissing(enriched, it) }
             tmdbDetails?.await()?.onSuccess { details ->
-                // A NATIVE TMDB title is replaced by its richer
-                // parse (it has nothing else to lose). A RESOLVED
-                // title (Archive/TVmaze/AniList) must keep its own
-                // ids — the TMDB parse only fills missing fields,
-                // or the Archive id (and with it playability) and
-                // the TVmaze id (episodes) would be lost.
                 enriched = if (title.tmdbId != null) {
                     details
                 } else {
                     mergeFillMissing(enriched, details)
                 }
             }?.onFailure { failures.add("details") }
-            val episodeList = episodes?.await()?.getOrElse {
+
+            var tmdbSeasonNumbers: List<Int> = emptyList()
+            tmdbTvBundle?.await()?.onSuccess { bundle ->
+                enriched = if (title.tmdbId != null && title.tvmazeId == null && title.anilistId == null) {
+                    bundle.title
+                } else {
+                    mergeFillMissing(enriched, bundle.title)
+                }
+                tmdbSeasonNumbers = bundle.seasonNumbers
+            }
+
+            val tvMazeEpisodeList = episodes?.await()?.getOrElse {
                 failures.add("episodes"); emptyList()
             }.orEmpty()
+
+            // When TVmaze has no episodes (TMDB TV shows & bridged Anime),
+            // load Season 1 episodes from TMDB and register all season tabs!
+            var groupedEpisodes: Map<Int, List<Episode>> = tvMazeEpisodeList.groupBy { ep -> ep.season }
+            if (groupedEpisodes.isEmpty() &&
+                tmdbSeasonNumbers.isNotEmpty() &&
+                effectiveTmdbId != null &&
+                apiKey != null
+            ) {
+                val firstSeason = tmdbSeasonNumbers.first()
+                val firstSeasonEpisodes = runCatching {
+                    TmdbApi.fetchTvSeasonEpisodes(apiKey, effectiveTmdbId, firstSeason)
+                }.getOrDefault(emptyList())
+                val mutableSeasons = LinkedHashMap<Int, List<Episode>>()
+                for (s in tmdbSeasonNumbers) {
+                    mutableSeasons[s] = if (s == firstSeason) firstSeasonEpisodes else emptyList()
+                }
+                if (firstSeasonEpisodes.isNotEmpty() || tmdbSeasonNumbers.isNotEmpty()) {
+                    groupedEpisodes = mutableSeasons
+                }
+            }
+            val episodeList = groupedEpisodes.values.flatten()
+
             var castList = cast?.await()?.getOrElse {
                 failures.add("cast"); emptyList()
             }.orEmpty()
             if (castList.isEmpty()) {
                 tmdbCast?.await()?.onSuccess { castList = it }
             }
-            // The files check gets its own outcome flags (Phase D):
-            // a failure is NOT "no files" and must not join the
-            // generic failures banner — the page shows a dedicated
-            // couldn't-check state with a working Retry instead.
+
             var filesCheckedNow = false
             var filesFailedNow = false
             val playable = when (val filesResult = files?.await()) {
@@ -467,8 +503,25 @@ class TitleDetailsViewModel(
             val moreLikeThis = recommendations?.await()
                 ?.getOrNull().orEmpty()
 
-            // Current download state for this title (if any) so the
-            // Download button can label itself honestly.
+            // Build instant multi-server cloud stream options when TMDB / IMDb id is present
+            val instantServers = if (enriched.archiveId == null &&
+                (enriched.tmdbId != null || enriched.imdbId != null)
+            ) {
+                com.watchly.app.data.remote.providers.StreamAggregator
+                    .getInstantEmbedServers(enriched)
+                    .map { s ->
+                        PlayableFile(
+                            url = s.url,
+                            fileName = "${enriched.name} (${s.providerName})",
+                            format = "EMBED",
+                            qualityLabel = s.providerName,
+                            headers = s.headers
+                        )
+                    }
+            } else {
+                emptyList()
+            }
+
             val downloadRecord = downloads?.recordForTitle(enriched.stableKey)
 
             _uiState.update {
@@ -476,17 +529,16 @@ class TitleDetailsViewModel(
                     title = enriched,
                     isLoading = false,
                     hasTmdbKey = apiKey != null,
-                    episodesBySeason = episodeList.groupBy { ep -> ep.season },
-                    selectedSeason = episodeList.map { ep -> ep.season }
-                        .distinct().minOrNull(),
+                    episodesBySeason = groupedEpisodes,
+                    selectedSeason = groupedEpisodes.keys
+                        .sortedWith(compareBy<Int> { s -> s == 0 }.thenBy { s -> s })
+                        .firstOrNull(),
+                    cloudServers = instantServers,
+                    selectedServerUrl = it.selectedServerUrl ?: instantServers.firstOrNull()?.url,
                     cast = castList,
                     watchProviders = watch,
                     trailerYoutubeId = trailerKey,
                     recommendations = moreLikeThis,
-                    // The enriched title can carry a different
-                    // stable key (a resolved TMDB id outranks the
-                    // source id) — re-read his rating under the key
-                    // the page now uses, like the watchlist state.
                     personalRating = ratings?.ratingFor(enriched.stableKey)
                         ?: it.personalRating,
                     playableFiles = playable,
@@ -592,9 +644,52 @@ class TitleDetailsViewModel(
         }
     }
 
-    /** Picks which season's episodes the list shows. */
+    /** Picks which season's episodes the list shows (lazy-loads TMDB seasons on demand). */
     fun selectSeason(season: Int) {
         _uiState.update { it.copy(selectedSeason = season) }
+        val state = _uiState.value
+        val existing = state.episodesBySeason[season]
+        val tmdbId = state.title.tmdbId
+        val apiKey = tmdbKeys?.getKey()
+        if (existing.isNullOrEmpty() && tmdbId != null && apiKey != null && state.title.tvmazeId == null) {
+            _uiState.update { it.copy(isSeasonLoading = true) }
+            viewModelScope.launch {
+                val loaded = runCatching {
+                    TmdbApi.fetchTvSeasonEpisodes(apiKey, tmdbId, season)
+                }.getOrDefault(emptyList())
+                _uiState.update { cur ->
+                    val nextMap = LinkedHashMap(cur.episodesBySeason)
+                    nextMap[season] = loaded
+                    val newlyWatched = loaded
+                        .filter { ep -> library.isEpisodeWatched(cur.title, ep.season, ep.number) }
+                        .map { ep -> "S${ep.season}E${ep.number}" }
+                    cur.copy(
+                        isSeasonLoading = false,
+                        episodesBySeason = nextMap,
+                        watchedEpisodes = cur.watchedEpisodes + newlyWatched
+                    )
+                }
+            }
+        }
+    }
+
+    /** Picks the preferred cloud streaming server. */
+    fun selectServer(serverUrl: String) {
+        _uiState.update { it.copy(selectedServerUrl = serverUrl) }
+    }
+
+    /** Builds the UpNext continuation queue for episodes following [current]. */
+    fun episodeQueueAfter(current: Episode): List<com.watchly.app.data.playback.UpNextItem> {
+        val state = _uiState.value
+        val seasonEpisodes = state.episodesBySeason[current.season].orEmpty()
+        return seasonEpisodes
+            .filter { it.number > current.number }
+            .map { ep ->
+                com.watchly.app.data.playback.UpNextItem(
+                    title = state.title,
+                    episodeLabel = "S${ep.season}E${ep.number} - ${ep.name ?: "Episode ${ep.number}"}"
+                )
+            }
     }
 
     // ------------------------------------------------------------------
@@ -709,10 +804,14 @@ class TitleDetailsViewModel(
                             "can be saved for offline watching."
                     )
                 }
-            repo == null || !state.hasPlayableSource -> _uiState.update {
+            repo == null || state.playableFiles.isEmpty() -> _uiState.update {
                 it.copy(
-                    infoMessage = "Only public-domain films and your own " +
-                        "library files can be saved for offline watching."
+                    infoMessage = if (state.hasCloudStreamSource) {
+                        "Tap ▶ Play and hit “Native Player” once detected to stream directly, " +
+                            "or save public-domain & local files offline."
+                    } else {
+                        "“${state.title.name}” is in the catalogue only — there is no file to save for offline watching."
+                    }
                 )
             }
             state.downloadStatus == DownloadStatus.COMPLETED -> _uiState.update {

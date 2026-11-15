@@ -35,7 +35,9 @@
  */
 package com.watchly.app.data.remote
 
+import com.watchly.app.data.browse.BrowseYearFilter
 import com.watchly.app.data.model.CastMember
+import com.watchly.app.data.model.Episode
 import com.watchly.app.data.model.MediaType
 import com.watchly.app.data.model.Person
 import com.watchly.app.data.model.Title
@@ -195,6 +197,116 @@ object TmdbApi {
             params.append("&vote_count.gte=100")
         }
         parseTvList(httpGet("$BASE_URL/discover/tv$params"))
+    }
+
+    /**
+     * Multi-filter movie discovery supporting pipe-separated original
+     * languages (e.g. "hi|te|ta|ml|kn"), multi-genre expressions
+     * ("28|53" or "28,53"), release date bounds, and minimum rating.
+     */
+    suspend fun discoverMoviesAdvanced(
+        apiKey: String,
+        languageQuery: String? = null,
+        genresQuery: String? = null,
+        yearFilter: BrowseYearFilter = BrowseYearFilter.ALL,
+        minRating: Double? = null,
+        sort: MovieSort = MovieSort.POPULAR,
+        page: Int = 1
+    ): List<Title> = withContext(Dispatchers.IO) {
+        val params = StringBuilder()
+        params.append("?api_key=").append(apiKey.enc())
+        params.append("&include_adult=false")
+        params.append("&page=").append(page)
+        params.append("&sort_by=").append(sort.sortParam.enc())
+        languageQuery?.takeIf { it.isNotBlank() }?.let {
+            params.append("&with_original_language=").append(it.enc())
+        }
+        genresQuery?.takeIf { it.isNotBlank() }?.let {
+            params.append("&with_genres=").append(it.enc())
+        }
+        yearFilter.startDateIso?.let {
+            params.append("&primary_release_date.gte=").append(it.enc())
+        }
+        yearFilter.endDateIso?.let {
+            params.append("&primary_release_date.lte=").append(it.enc())
+        }
+        minRating?.let {
+            params.append("&vote_average.gte=").append(it)
+        }
+        if (sort == MovieSort.TOP_RATED || minRating != null) {
+            val minVotes = if (languageQuery.isNullOrBlank()) 80 else 8
+            params.append("&vote_count.gte=").append(minVotes)
+        }
+        parseMovieList(httpGet("$BASE_URL/discover/movie$params"))
+    }
+
+    /**
+     * Multi-filter TV discovery supporting multi-language, multi-genre,
+     * air-date bounds, and minimum rating.
+     */
+    suspend fun discoverTvAdvanced(
+        apiKey: String,
+        languageQuery: String? = null,
+        genresQuery: String? = null,
+        yearFilter: BrowseYearFilter = BrowseYearFilter.ALL,
+        minRating: Double? = null,
+        sort: MovieSort = MovieSort.POPULAR,
+        page: Int = 1
+    ): List<Title> = withContext(Dispatchers.IO) {
+        val tvSortParam = when (sort) {
+            MovieSort.POPULAR -> "popularity.desc"
+            MovieSort.TOP_RATED -> "vote_average.desc"
+            MovieSort.NEWEST -> "first_air_date.desc"
+            MovieSort.A_Z -> "name.asc"
+        }
+        val params = StringBuilder()
+        params.append("?api_key=").append(apiKey.enc())
+        params.append("&include_adult=false")
+        params.append("&page=").append(page)
+        params.append("&sort_by=").append(tvSortParam.enc())
+        languageQuery?.takeIf { it.isNotBlank() }?.let {
+            params.append("&with_original_language=").append(it.enc())
+        }
+        genresQuery?.takeIf { it.isNotBlank() }?.let {
+            params.append("&with_genres=").append(it.enc())
+        }
+        yearFilter.startDateIso?.let {
+            params.append("&first_air_date.gte=").append(it.enc())
+        }
+        yearFilter.endDateIso?.let {
+            params.append("&first_air_date.lte=").append(it.enc())
+        }
+        minRating?.let {
+            params.append("&vote_average.gte=").append(it)
+        }
+        if (sort == MovieSort.TOP_RATED || minRating != null) {
+            val minVotes = if (languageQuery.isNullOrBlank()) 50 else 5
+            params.append("&vote_count.gte=").append(minVotes)
+        }
+        parseTvList(httpGet("$BASE_URL/discover/tv$params"))
+    }
+
+    /** Enriched TV show metadata + season list (`GET /tv/:id?append_to_response=external_ids`). */
+    data class TvDetailsBundle(
+        val title: Title,
+        val seasonNumbers: List<Int>
+    )
+
+    suspend fun fetchTvDetails(apiKey: String, tmdbId: Int): TvDetailsBundle =
+        withContext(Dispatchers.IO) {
+            val url = "$BASE_URL/tv/$tmdbId?api_key=${apiKey.enc()}&append_to_response=external_ids"
+            parseTvDetailsBundle(httpGet(url))
+                ?: throw IllegalStateException("TMDB returned no TV details for id $tmdbId")
+        }
+
+    /** Episodes for one season (`GET /tv/:id/season/:seasonNumber`). */
+    suspend fun fetchTvSeasonEpisodes(
+        apiKey: String,
+        tmdbId: Int,
+        seasonNumber: Int
+    ): List<Episode> = withContext(Dispatchers.IO) {
+        val url = "$BASE_URL/tv/$tmdbId/season/$seasonNumber?api_key=${apiKey.enc()}"
+        parseTvSeasonEpisodes(httpGet(url), seasonNumber)
     }
 
     /** Top Trending Movies of the week. */
@@ -675,7 +787,9 @@ object TmdbApi {
             } else {
                 null
             },
-            status = if (detailed) movie.optText("status") else null
+            status = if (detailed) movie.optText("status") else null,
+            backdropUrl = imageUrl(movie.optText("backdrop_path"), "w780"),
+            originalLanguage = movie.optText("original_language")?.takeIf { it.isNotBlank() }
         )
     }
 
@@ -706,8 +820,98 @@ object TmdbApi {
             },
             mediaType = MediaType.TV,
             year = firstAirDate?.takeIf { it.length >= 4 }?.substring(0, 4),
-            genres = genres
+            genres = genres,
+            backdropUrl = imageUrl(tv.optText("backdrop_path"), "w780"),
+            originalLanguage = tv.optText("original_language")?.takeIf { it.isNotBlank() }
         )
+    }
+
+    /** Parses `GET /tv/:id?append_to_response=external_ids`. */
+    internal fun parseTvDetailsBundle(body: String): TvDetailsBundle? {
+        val tv = runCatching { JSONObject(body) }.getOrNull() ?: return null
+        val name = tv.optText("name") ?: tv.optText("original_name") ?: return null
+        val firstAirDate = tv.optText("first_air_date")
+        val genres = ArrayList<String>()
+        val genreArray = tv.optJSONArray("genres")
+        if (genreArray != null) {
+            for (i in 0 until genreArray.length()) {
+                genreArray.optJSONObject(i)?.optText("name")?.let { genres.add(it) }
+            }
+        }
+        val runtimes = tv.optJSONArray("episode_run_time")
+        val runtime = if (runtimes != null && runtimes.length() > 0) {
+            runtimes.optInt(0).takeIf { it > 0 }
+        } else {
+            null
+        }
+        val imdbId = tv.optJSONObject("external_ids")?.optText("imdb_id")
+            ?.takeIf { it.isNotBlank() }
+        val seasonArray = tv.optJSONArray("seasons")
+        val seasons = ArrayList<Int>()
+        if (seasonArray != null) {
+            for (i in 0 until seasonArray.length()) {
+                val s = seasonArray.optJSONObject(i) ?: continue
+                val epCount = s.optInt("episode_count", 0)
+                val seasonNum = s.optInt("season_number", -1)
+                if (seasonNum > 0 && epCount > 0) {
+                    seasons.add(seasonNum)
+                }
+            }
+        }
+        if (seasons.isEmpty() && tv.optInt("number_of_seasons", 0) > 0) {
+            for (s in 1..tv.optInt("number_of_seasons", 1)) {
+                seasons.add(s)
+            }
+        }
+        val title = Title(
+            tmdbId = if (tv.has("id") && !tv.isNull("id")) tv.optInt("id") else null,
+            imdbId = imdbId,
+            name = name,
+            overview = tv.optText("overview")?.takeIf { it.isNotBlank() },
+            posterUrl = imageUrl(tv.optText("poster_path"), "w500"),
+            rating = if (tv.has("vote_average") && !tv.isNull("vote_average")) {
+                tv.optDouble("vote_average").takeIf { it > 0.0 }
+            } else {
+                null
+            },
+            mediaType = MediaType.TV,
+            year = firstAirDate?.takeIf { it.length >= 4 }?.substring(0, 4),
+            genres = genres,
+            runtimeMinutes = runtime,
+            status = tv.optText("status"),
+            backdropUrl = imageUrl(tv.optText("backdrop_path"), "w780"),
+            originalLanguage = tv.optText("original_language")?.takeIf { it.isNotBlank() }
+        )
+        return TvDetailsBundle(title = title, seasonNumbers = seasons.distinct().sorted())
+    }
+
+    /** Parses `GET /tv/:id/season/:seasonNumber` into canonical [Episode]s. */
+    internal fun parseTvSeasonEpisodes(body: String, fallbackSeason: Int): List<Episode> {
+        val root = runCatching { JSONObject(body) }.getOrNull() ?: return emptyList()
+        val array = root.optJSONArray("episodes") ?: return emptyList()
+        val episodes = ArrayList<Episode>(array.length())
+        for (i in 0 until array.length()) {
+            val row = array.optJSONObject(i) ?: continue
+            val number = row.optInt("episode_number", i + 1)
+            val season = row.optInt("season_number", fallbackSeason)
+            episodes.add(
+                Episode(
+                    id = if (row.has("id") && !row.isNull("id")) row.optInt("id") else null,
+                    season = season,
+                    number = number,
+                    name = row.optText("name"),
+                    airDate = row.optText("air_date"),
+                    runtimeMinutes = if (row.has("runtime") && !row.isNull("runtime")) {
+                        row.optInt("runtime").takeIf { it > 0 }
+                    } else {
+                        null
+                    },
+                    overview = row.optText("overview")?.takeIf { it.isNotBlank() },
+                    imageUrl = imageUrl(row.optText("still_path"), "w300")
+                )
+            )
+        }
+        return episodes
     }
 
     /** TMDB image path → full URL at the given size, or null. */
