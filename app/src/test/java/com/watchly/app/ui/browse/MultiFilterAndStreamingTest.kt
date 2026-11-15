@@ -72,11 +72,11 @@ class MultiFilterAndStreamingTest {
         assertTrue(labels.contains("Korean Cinema"))
 
         val south = INDUSTRIES.first { it.label == "South Indian" }
-        assertTrue(south.matchesLanguage("te"))
-        assertTrue(south.matchesLanguage("ta"))
-        assertTrue(south.matchesLanguage("ml"))
-        assertTrue(south.matchesLanguage("kn"))
-        assertFalse(south.matchesLanguage("en"))
+        assertTrue(south.languageCodes.contains("te"))
+        assertTrue(south.languageCodes.contains("ta"))
+        assertTrue(south.languageCodes.contains("ml"))
+        assertTrue(south.languageCodes.contains("kn"))
+        assertFalse(south.languageCodes.contains("en"))
     }
 
     @Test
@@ -113,7 +113,7 @@ class MultiFilterAndStreamingTest {
             genreMatchMode = GenreMatchMode.ANY,
             selectedIndustries = setOf(bollywood, southIndian),
             yearFilter = BrowseYearFilter.DECADE_2020S,
-            ratingFilter = BrowseRatingFilter.PLUS_7_5,
+            ratingFilter = BrowseRatingFilter.ACCLAIMED_75,
             sort = BrowseSort.TOP_RATED
         )
         assertEquals(listOf("Manjummel Boys", "RRR", "Jawan"), anyMatch.map { it.name })
@@ -125,7 +125,7 @@ class MultiFilterAndStreamingTest {
             genreMatchMode = GenreMatchMode.ALL,
             selectedIndustries = setOf(bollywood, southIndian),
             yearFilter = BrowseYearFilter.DECADE_2020S,
-            ratingFilter = BrowseRatingFilter.PLUS_7_5,
+            ratingFilter = BrowseRatingFilter.ACCLAIMED_75,
             sort = BrowseSort.TOP_RATED
         )
         assertEquals(listOf("Jawan"), allMatch.map { it.name })
@@ -164,7 +164,7 @@ class MultiFilterAndStreamingTest {
             vm.toggleGenre("Action")
             vm.toggleGenre("Science Fiction")
             vm.selectYearFilter(BrowseYearFilter.DECADE_2020S)
-            vm.selectRatingFilter(BrowseRatingFilter.PLUS_7_5)
+            vm.selectRatingFilter(BrowseRatingFilter.ACCLAIMED_75)
             advanceUntilIdle()
 
             val state = vm.uiState.value
