@@ -35,6 +35,15 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.watchly.app.ui.theme.WatchlyGold
 import com.watchly.app.ui.theme.WatchlyGoldLight
 
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun WebStreamPlayerLayout(
@@ -45,6 +54,8 @@ fun WebStreamPlayerLayout(
     modifier: Modifier = Modifier
 ) {
     BackHandler { onBack() }
+    var isPageLoading by remember { mutableStateOf(true) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -78,18 +89,38 @@ fun WebStreamPlayerLayout(
                 )
             }
         }
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        ) {
             AndroidView(
                 factory = { context ->
                     WebView(context).apply {
+                        setBackgroundColor(android.graphics.Color.BLACK)
+                        setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
+                        settings.databaseEnabled = true
                         settings.mediaPlaybackRequiresUserGesture = false
+                        settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        settings.setSupportMultipleWindows(false)
+                        settings.javaScriptCanOpenWindowsAutomatically = false
                         settings.userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
                         webChromeClient = WebChromeClient()
                         webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                super.onPageFinished(view, url)
+                                isPageLoading = false
+                            }
+
                             override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
                                 val url = request?.url?.toString() ?: return false
+                                val streamHost = runCatching { java.net.URI(streamUrl).host }.getOrNull()
+                                val targetHost = runCatching { java.net.URI(url).host }.getOrNull()
+                                if (streamHost != null && targetHost != null && !targetHost.contains(streamHost)) {
+                                    return true // Block external ad popup navigation
+                                }
                                 return !url.startsWith("http://") && !url.startsWith("https://")
                             }
                         }
@@ -98,6 +129,25 @@ fun WebStreamPlayerLayout(
                 },
                 modifier = Modifier.fillMaxSize()
             )
+
+            if (isPageLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = WatchlyGold)
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = "Connecting to stream...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = WatchlyGoldLight
+                        )
+                    }
+                }
+            }
         }
     }
 }
