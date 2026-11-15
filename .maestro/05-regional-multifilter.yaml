@@ -10,6 +10,11 @@ appId: com.watchly.app
 - extendedWaitUntil:
     visible: "Watchly"
     timeout: 60000
+- runFlow:
+    when:
+      visible: "Close app"
+    commands:
+      - tapOn: "Wait"
 - tapOn: "Movies"
 - extendedWaitUntil:
     visible: "Filters"

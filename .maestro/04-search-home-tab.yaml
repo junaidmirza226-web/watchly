@@ -36,7 +36,15 @@ appId: com.watchly.app
 - extendedWaitUntil:
     visible: "Watchly"
     timeout: 60000
+- runFlow:
+    when:
+      visible: "Close app"
+    commands:
+      - tapOn: "Wait"
 - tapOn: "Search"
+- extendedWaitUntil:
+    visible: "Movies, shows, anime…"
+    timeout: 15000
 - tapOn: "Movies, shows, anime…"
 - inputText: "Night of the Living Dead"
 - extendedWaitUntil:
