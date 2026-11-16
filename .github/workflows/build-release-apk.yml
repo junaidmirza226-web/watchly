@@ -163,17 +163,36 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # One release per build (v1.5.1.<run>): the app polls
-          # /releases/latest, sees a strictly newer version, and offers the
-          # one-tap download-and-install. Tag builds keep the manual release
-          # step below; branch builds always refresh this one.
+          # One release per build (v1.5.1.<run>), IMMUTABLE once published:
+          # re-runs and later builds must never swap the APK bytes under a
+          # tag a device may be downloading right now. If the release
+          # already exists we verify it and leave it untouched.
           TAG="v$BUILD_VERSION_NAME"
-          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::Release $TAG already exists — leaving it untouched (assets are immutable)."
+            gh release view "$TAG" --json tagName,assets --jq '{tag: .tagName, assets: [.assets[] | {name, size, digest}]}'
+            exit 0
+          fi
           gh release create "$TAG" release-output/watchly.apk \
+            --target "$GITHUB_SHA" \
             --title "Watchly $BUILD_VERSION_NAME" \
             --notes "Automatic build $BUILD_VERSION_NAME (workflow run $GITHUB_RUN_NUMBER). Installs over the previous version — settings, library and downloads carry over." \
             --latest
-          gh release view "$TAG" --json tagName,assets --jq '{tag: .tagName, assets: [.assets[].name]}'
+
+          # Self-proof: download the published asset back from GitHub and
+          # verify it is byte-identical to the APK we built and versioned.
+          rm -rf /tmp/release-verify && mkdir -p /tmp/release-verify
+          gh release download "$TAG" -p watchly.apk -D /tmp/release-verify
+          SHA_LOCAL=$(sha256sum release-output/watchly.apk | cut -d' ' -f1)
+          SHA_LIVE=$(sha256sum /tmp/release-verify/watchly.apk | cut -d' ' -f1)
+          echo "::notice::Release $TAG asset sha256=$SHA_LIVE (built $SHA_LOCAL)"
+          if [ "$SHA_LOCAL" != "$SHA_LIVE" ]; then
+            echo "::error::The published asset is NOT the APK we built — refusing to ship."
+            exit 1
+          fi
+          AAPT=$(find $ANDROID_HOME/build-tools/ -name aapt 2>/dev/null | sort -V | tail -n 1)
+          echo "::notice::Published asset badging: $($AAPT dump badging /tmp/release-verify/watchly.apk | head -n 1)"
+          gh release view "$TAG" --json tagName,assets --jq '{tag: .tagName, assets: [.assets[] | {name, size, digest}]}'
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

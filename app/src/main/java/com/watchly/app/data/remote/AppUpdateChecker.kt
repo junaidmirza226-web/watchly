@@ -106,7 +106,7 @@ object AppUpdateChecker {
         installScope.launch {
             val info = checkForUpdates(appContext)
             if (info != null) {
-                startUpdate(appContext, info.downloadUrl)
+                startUpdate(appContext, info.downloadUrl, promisedVersion = info.latestVersion)
             }
         }
     }
@@ -238,8 +238,17 @@ object AppUpdateChecker {
     /**
      * Downloads [downloadUrl] and launches the system installer. Non-APK
      * URLs (release pages) fall back to opening the browser.
+     *
+     * [promisedVersion] is the version the update banner offered: the
+     * installer only opens when the downloaded file really is at least
+     * that version and strictly newer than the installed one — a stale
+     * or wrong file can never silently "reinstall the same version".
      */
-    fun startUpdate(context: Context, downloadUrl: String) {
+    fun startUpdate(
+        context: Context,
+        downloadUrl: String,
+        promisedVersion: String? = null
+    ) {
         if (!downloadUrl.endsWith(".apk", ignoreCase = true)) {
             triggerInstall(context, downloadUrl)
             return
@@ -298,11 +307,19 @@ object AppUpdateChecker {
                 } ?: -1L
                 val archiveName = archive?.versionName ?: "?"
                 val installedCode = currentVersionCode(appContext)
-                if (archive == null || target.length() < 100_000L || archiveCode <= installedCode) {
+                val promiseKept = promisedVersion == null ||
+                    !isNewerVersion(current = archiveName, remote = promisedVersion)
+                if (archive == null || target.length() < 100_000L ||
+                    archiveCode <= installedCode || !promiseKept
+                ) {
                     target.delete()
+                    val promiseNote = promisedVersion?.let {
+                        if (promiseKept) "" else " The update was promised as $it."
+                    } ?: ""
                     _installState.value = InstallState.Error(
                         "Downloaded file is build $archiveName (code $archiveCode) but you already " +
-                            "have ${currentVersion(appContext)} (code $installedCode) — tap Update to try again."
+                            "have ${currentVersion(appContext)} (code $installedCode).$promiseNote " +
+                            "Tap Update to try again."
                     )
                     return@launch
                 }
