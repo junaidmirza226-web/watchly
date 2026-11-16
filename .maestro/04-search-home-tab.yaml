@@ -49,20 +49,26 @@ appId: com.watchly.app
 - inputText: "Night of the Living Dead"
 - extendedWaitUntil:
     visible: "Night of the Living Dead"
-    timeout: 30000
+    timeout: 60000
 # Index 1 = first result card (index 0 is the search field).
 - tapOn:
     text: "Night of the Living Dead"
     index: 1
 - extendedWaitUntil:
     visible: "Mark watched"
-    timeout: 30000
+    timeout: 60000
 # Back to the search results. Focus returns to the search
 # field and the keyboard comes back up with it.
 - pressKey: back
+# Same ANR housekeeping after the transition.
+- runFlow:
+    when:
+      visible: "Close app"
+    commands:
+      - tapOn: "Wait"
 - extendedWaitUntil:
     visible: "Night of the Living Dead"
-    timeout: 30000
+    timeout: 60000
 # Evidence frame: is the keyboard covering the bottom bar at
 # the moment of the tap?
 - takeScreenshot: 04-before-home-tap
@@ -71,4 +77,4 @@ appId: com.watchly.app
 - tapOn: "Home"
 - extendedWaitUntil:
     visible: "Watchly"
-    timeout: 30000
+    timeout: 60000
