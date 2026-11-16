@@ -89,6 +89,8 @@ data class PlayerUiState(
     val webEmbedUrl: String? = null,
     /** Available cloud embed servers for 1-tap server switching. */
     val embedServers: List<PlayableFile> = emptyList(),
+    /** Bumped to force-reload the same embed URL (Retry / manual re-pick). */
+    val embedReloadTick: Int = 0,
     /** Subtitle picker is open (cycle 4, OpenSubtitles). */
     val subtitlesOpen: Boolean = false,
     /** A subtitle search/download is in flight. */
@@ -160,7 +162,20 @@ class PlayerViewModel(
      * real player. Defaults to none so tests with fake engines
      * (player == null) never touch the session layer.
      */
-    private val sessionFactory: (Player) -> PlayerMediaSessionController? = { null }
+    private val sessionFactory: (Player) -> PlayerMediaSessionController? = { null },
+    /**
+     * The catalogue-to-sources resolver used by [start]; injectable so
+     * tests drive the embed flow without network.
+     */
+    private val mainResolver: suspend (Title, Int?, Int?) -> ResolvedPlayable =
+        { title, season, episode ->
+            PlayableSourceResolver.resolve(
+                title,
+                com.watchly.app.data.downloads.DownloadsRepository(appContext),
+                season = season,
+                episode = episode
+            )
+        }
 ) : ViewModel() {
 
     /**
@@ -213,6 +228,9 @@ class PlayerViewModel(
     /** Guards the finish path: it must run once per item, not per poll. */
     private var finishHandled = false
 
+    /** Embed servers already tried and dead this session. */
+    private var failedEmbeds = mutableSetOf<String>()
+
     init {
         start()
     }
@@ -249,8 +267,12 @@ class PlayerViewModel(
                         )
                     }
                 if (instantServers.isNotEmpty()) {
+                    // Prefer the source that worked last time (one-tap
+                    // "it just plays"), then the caller's pick, then best.
+                    val remembered = playback.getQualityUrl(scopedKey)
                     val chosenUrl = request.preferredEmbedUrl
                         ?.takeIf { pref -> instantServers.any { it.url == pref } }
+                        ?: instantServers.firstOrNull { it.url == remembered }?.url
                         ?: instantServers.first().url
                     _uiState.update {
                         it.copy(
@@ -268,12 +290,7 @@ class PlayerViewModel(
 
             _uiState.update { it.copy(isBuffering = true, errorMessage = null) }
             viewModelScope.launch {
-                val resolved = PlayableSourceResolver.resolve(
-                    request.title,
-                    com.watchly.app.data.downloads.DownloadsRepository(appContext),
-                    season = season,
-                    episode = episode
-                )
+                val resolved = mainResolver(request.title, season, episode)
                 val embeds = resolved.files.filter { it.format == "EMBED" }
                 val directFiles = resolved.files.filter { it.format != "EMBED" }
 
@@ -287,7 +304,12 @@ class PlayerViewModel(
                     }
                     startWithFiles(directFiles)
                 } else if (resolved.webEmbedUrl != null || request.preferredEmbedUrl != null) {
-                    val activeEmbed = request.preferredEmbedUrl ?: resolved.webEmbedUrl
+                    // Start on the source that worked last time when it is
+                    // still on the server list — one-tap "it just plays".
+                    val remembered = playback.getQualityUrl(scopedKey)
+                    val activeEmbed = request.preferredEmbedUrl
+                        ?: embeds.firstOrNull { it.url == remembered }?.url
+                        ?: resolved.webEmbedUrl
                     _uiState.update {
                         it.copy(
                             webEmbedUrl = activeEmbed,
@@ -315,9 +337,77 @@ class PlayerViewModel(
 
     /** Switches the active cloud server in 1 tap without leaving fullscreen. */
     fun selectWebServer(server: PlayableFile) {
+        // A manual pick is a promise: remember it and forgive past failures.
+        failedEmbeds.remove(server.url)
+        playback.saveQualityUrl(scopedKey, server.url)
         _uiState.update {
             it.copy(
                 webEmbedUrl = server.url,
+                embedReloadTick = it.embedReloadTick + 1,
+                errorMessage = null,
+                failoverNote = null
+            )
+        }
+    }
+
+    /**
+     * The embed page itself died (main-frame load failure) — mirror the
+     * engine's [failOver]: walk the ranked server list, and only surface
+     * an error when every cloud server is exhausted. As a last resort
+     * direct (sniffable) sources are tried natively.
+     */
+    fun embedSourceFailed() {
+        val state = _uiState.value
+        val current = state.webEmbedUrl ?: return
+        if (state.errorMessage != null) return
+        failedEmbeds.add(current)
+        val next = state.embedServers.firstOrNull {
+            it.url != current && it.url !in failedEmbeds
+        }
+        if (next == null) {
+            val direct = state.files.filter { it.format != "EMBED" }
+            if (direct.isNotEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        webEmbedUrl = null,
+                        files = direct,
+                        fileIndex = 0,
+                        failoverNote = "Cloud servers failed — trying direct sources…",
+                        embedReloadTick = it.embedReloadTick + 1
+                    )
+                }
+                startWithFiles(direct)
+                return
+            }
+            _uiState.update {
+                it.copy(
+                    failoverNote = null,
+                    errorMessage = "Every source for “${state.title.name}” failed. " +
+                        "Tap Retry or pick a server."
+                )
+            }
+            return
+        }
+        _uiState.update {
+            it.copy(
+                webEmbedUrl = next.url,
+                embedReloadTick = it.embedReloadTick + 1,
+                failoverNote = "This source failed — trying the next one…",
+                errorMessage = null
+            )
+        }
+    }
+
+    /** Another full pass over the server list after everything failed. */
+    fun retryEmbeds() {
+        failedEmbeds.clear()
+        val state = _uiState.value
+        val first = state.embedServers.firstOrNull()?.url ?: state.webEmbedUrl
+        _uiState.update {
+            it.copy(
+                webEmbedUrl = first,
+                embedReloadTick = it.embedReloadTick + 1,
+                failoverNote = null,
                 errorMessage = null
             )
         }
@@ -820,6 +910,9 @@ class PlayerViewModel(
             finishTitle()
             return
         }
+        // Remember the source that is actually playing, so this title
+        // starts on a known-good source next time (failover learns).
+        state.currentFile?.let { playback.saveQualityUrl(scopedKey, it.url) }
         playback.saveProgress(
             PlaybackProgress(
                 key = state.title.stableKey,

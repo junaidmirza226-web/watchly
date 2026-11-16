@@ -16,6 +16,7 @@ import android.os.Message
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -74,6 +75,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -104,7 +106,16 @@ fun WebStreamPlayerLayout(
     onSelectServer: (PlayableFile) -> Unit = {},
     hasNextEpisode: Boolean = false,
     onNextEpisode: () -> Unit = {},
-    onPromoteDirectStream: ((url: String, headers: Map<String, String>) -> Unit)? = null
+    onPromoteDirectStream: ((url: String, headers: Map<String, String>) -> Unit)? = null,
+    /** Called when the embed page itself is dead (main-frame load failure). */
+    onSourceDead: () -> Unit = {},
+    /** Failover in progress ("This source failed — trying the next one…"). */
+    statusNote: String? = null,
+    /** Terminal: every source failed — full-card overlay with Retry. */
+    errorMessage: String? = null,
+    onRetry: () -> Unit = {},
+    /** Bumped by the ViewModel to force-reload the same URL (Retry). */
+    reloadTick: Int = 0
 ) {
     BackHandler { onBack() }
 
@@ -141,12 +152,30 @@ fun WebStreamPlayerLayout(
         mutableStateOf<Pair<String, Map<String, String>>?>(null)
     }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    // One death report per source load (aborted-load noise can fire
+    // several callbacks for the same dying page).
+    val deadReported = remember { mutableStateOf(false) }
+    // Identifies the current load ("url#tick"); the WebView reloads
+    // only when this changes — that is what makes Retry re-load the
+    // very same URL instead of being a no-op.
+    val loadKey = remember { mutableStateOf("$streamUrl#$reloadTick") }
 
     // Auto-collapse top bar after 5s once loaded so video fills 100% of screen
     LaunchedEffect(chromeExpanded, isPageLoading, serverSheetOpen) {
         if (chromeExpanded && !isPageLoading && !serverSheetOpen) {
             delay(5_000L)
             chromeExpanded = false
+        }
+    }
+
+    // Source-death watchdog: a black-hole network hangs the load and
+    // never reports an error at all — after the deadline, treat the
+    // source as dead so failover moves on instead of spinning forever.
+    LaunchedEffect(streamUrl, reloadTick) {
+        delay(LOAD_DEADLINE_MS)
+        if (isPageLoading && !deadReported.value) {
+            deadReported.value = true
+            onSourceDead()
         }
     }
 
@@ -201,6 +230,41 @@ fun WebStreamPlayerLayout(
                         ) {
                             super.onPageStarted(view, url, favicon)
                             view?.evaluateJavascript(AD_CLEAN_JS, null)
+                        }
+
+                        override fun onReceivedError(
+                            view: WebView?,
+                            request: WebResourceRequest?,
+                            error: WebResourceError?
+                        ) {
+                            super.onReceivedError(view, request, error)
+                            val code = error?.errorCode ?: return
+                            if (isFatalLoadError(
+                                    errorCode = code,
+                                    isForMainFrame = request?.isForMainFrame == true,
+                                    failingUrl = request?.url?.toString(),
+                                    activeUrl = streamUrl
+                                ) && !deadReported.value
+                            ) {
+                                deadReported.value = true
+                                view?.post { onSourceDead() }
+                            }
+                        }
+
+                        override fun onReceivedHttpError(
+                            view: WebView?,
+                            request: WebResourceRequest?,
+                            errorResponse: WebResourceResponse?
+                        ) {
+                            super.onReceivedHttpError(view, request, errorResponse)
+                            if (isFatalHttpError(
+                                    statusCode = errorResponse?.statusCode ?: 0,
+                                    isForMainFrame = request?.isForMainFrame == true
+                                ) && !deadReported.value
+                            ) {
+                                deadReported.value = true
+                                view?.post { onSourceDead() }
+                            }
                         }
 
                         override fun onPageFinished(view: WebView?, url: String?) {
@@ -274,7 +338,11 @@ fun WebStreamPlayerLayout(
                 }
             },
             update = { webView ->
-                if (webView.url != streamUrl && webView.originalUrl != streamUrl) {
+                val key = "$streamUrl#$reloadTick"
+                if (loadKey.value != key) {
+                    loadKey.value = key
+                    deadReported.value = false
+                    sniffedStream = null
                     isPageLoading = true
                     webView.loadUrl(streamUrl)
                 }
@@ -314,6 +382,67 @@ fun WebStreamPlayerLayout(
                             color = Color.White.copy(alpha = 0.65f)
                         )
                     }
+                }
+            }
+        }
+
+        // Failover in progress — the system is switching sources itself.
+        statusNote?.let { note ->
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 56.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(Color.Black.copy(alpha = 0.72f))
+                    .border(1.dp, WatchlyGold.copy(alpha = 0.45f), RoundedCornerShape(999.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = note,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = WatchlyGoldLight
+                )
+            }
+        }
+
+        // Terminal: every source failed — Retry, or pick a server by hand.
+        errorMessage?.let { message ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.9f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = WatchlyGold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    Surface(
+                        onClick = onRetry,
+                        shape = RoundedCornerShape(999.dp),
+                        color = WatchlyGold
+                    ) {
+                        Text(
+                            text = "Retry",
+                            modifier = Modifier.padding(horizontal = 32.dp, vertical = 12.dp),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Color(0xFF1A1405)
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = "Or tap Servers to pick one by hand.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
                 }
             }
         }
@@ -644,3 +773,28 @@ fun WebStreamPlayerLayout(
         }
     }
 }
+
+/** How long a source may sit "loading" before it counts as dead. */
+private const val LOAD_DEADLINE_MS = 30_000L
+
+/**
+ * True when a WebView load failure means the SOURCE itself is dead
+ * (so the player should fail over) as opposed to navigation noise:
+ * cancelled loads surface as [WebViewClient.ERROR_UNKNOWN] and
+ * intent/scheme stunts as [WebViewClient.ERROR_UNSUPPORTED_SCHEME],
+ * and failures for an abandoned URL belong to a load we already left.
+ */
+internal fun isFatalLoadError(
+    errorCode: Int,
+    isForMainFrame: Boolean,
+    failingUrl: String?,
+    activeUrl: String
+): Boolean =
+    isForMainFrame &&
+        failingUrl != null && failingUrl == activeUrl &&
+        errorCode != WebViewClient.ERROR_UNKNOWN &&
+        errorCode != WebViewClient.ERROR_UNSUPPORTED_SCHEME
+
+/** True when a main-frame HTTP status means the source is dead. */
+internal fun isFatalHttpError(statusCode: Int, isForMainFrame: Boolean): Boolean =
+    isForMainFrame && statusCode >= 400

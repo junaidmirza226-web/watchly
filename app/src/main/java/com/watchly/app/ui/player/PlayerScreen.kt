@@ -170,7 +170,12 @@ fun PlayerScreen(
             onSelectServer = viewModel::selectWebServer,
             hasNextEpisode = state.upNextQueueSize > 0,
             onNextEpisode = viewModel::skipToNextWebEpisode,
-            onPromoteDirectStream = viewModel::promoteSniffedDirectStream
+            onPromoteDirectStream = viewModel::promoteSniffedDirectStream,
+            onSourceDead = viewModel::embedSourceFailed,
+            statusNote = state.failoverNote,
+            errorMessage = state.errorMessage,
+            onRetry = viewModel::retryEmbeds,
+            reloadTick = state.embedReloadTick
         )
         return
     }
