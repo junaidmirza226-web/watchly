@@ -799,25 +799,55 @@ class TitleDetailsViewModel(
         val repo = downloads
         when {
             // YouTube titles play in the official player; there is
-            // no file Watchly may save, and the note says so plainly.
+            // no file Watchly may save.
             state.title.youtubeId != null && !state.hasPlayableSource ->
                 _uiState.update {
                     it.copy(
                         infoMessage = "“${it.title.name}” plays in YouTube's " +
-                            "official player, so it can't be downloaded. " +
-                            "Public-domain films and your own library files " +
-                            "can be saved for offline watching."
+                            "official player, so it can't be downloaded."
                     )
                 }
-            repo == null || state.playableFiles.isEmpty() -> _uiState.update {
+            repo == null -> _uiState.update {
                 it.copy(
-                    infoMessage = if (state.hasCloudStreamSource) {
-                        "Tap ▶ Play and hit “Native Player” once detected to stream directly, " +
-                            "or save public-domain & local files offline."
-                    } else {
-                        "“${state.title.name}” is in the catalogue only — there is no file to save for offline watching."
-                    }
+                    infoMessage = "“${it.title.name}” has no downloadable file " +
+                        "right now — try again shortly."
                 )
+            }
+            state.playableFiles.isEmpty() -> {
+                if (state.hasCloudStreamSource) {
+                    // Downloading must work WITHOUT playing first: resolve
+                    // the real files now, then start the download.
+                    viewModelScope.launch {
+                        _uiState.update { it.copy(infoMessage = "Finding a downloadable file…") }
+                        val resolved = runCatching {
+                            com.watchly.app.data.playback.PlayableSourceResolver
+                                .resolve(state.title, downloads)
+                        }.getOrDefault(
+                            com.watchly.app.data.playback.ResolvedPlayable.NOT_PLAYABLE
+                        )
+                        val direct = resolved.files.filter {
+                            it.format != "EMBED" && it.url.startsWith("http")
+                        }
+                        if (direct.isEmpty()) {
+                            _uiState.update {
+                                it.copy(
+                                    infoMessage = "Couldn't find a downloadable file " +
+                                        "for “${it.title.name}” right now."
+                                )
+                            }
+                        } else {
+                            _uiState.update { it.copy(playableFiles = direct) }
+                            onDownloadRequested()
+                        }
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            infoMessage = "“${state.title.name}” is in the catalogue only " +
+                                "— there is no file to save for offline watching."
+                        )
+                    }
+                }
             }
             state.downloadStatus == DownloadStatus.COMPLETED -> _uiState.update {
                 it.copy(

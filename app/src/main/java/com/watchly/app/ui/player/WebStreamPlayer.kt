@@ -688,11 +688,6 @@ fun WebStreamPlayerLayout(
                             color = WatchlyGold,
                             modifier = Modifier.weight(1f)
                         )
-                        Text(
-                            text = "Switch instantly if slow or wrong audio",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.65f)
-                        )
                         Spacer(Modifier.width(8.dp))
                         IconButton(
                             onClick = { serverSheetOpen = false },

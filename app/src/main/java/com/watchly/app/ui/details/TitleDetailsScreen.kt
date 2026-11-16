@@ -12,7 +12,6 @@
 package com.watchly.app.ui.details
 
 import android.content.Intent
-import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -83,11 +82,8 @@ import coil.compose.AsyncImage
 import com.watchly.app.data.downloads.DownloadPolicy
 import com.watchly.app.data.model.CastMember
 import com.watchly.app.data.model.Episode
-import com.watchly.app.data.model.MediaType
-import com.watchly.app.data.model.Playability
 import com.watchly.app.data.model.PlayableFile
 import com.watchly.app.data.model.Title
-import com.watchly.app.data.model.WatchProvider
 import com.watchly.app.ui.theme.WatchlyGold
 import com.watchly.app.ui.theme.watchlyGoldButtonColors
 import com.watchly.app.ui.theme.WatchlyGoldLight
@@ -347,64 +343,6 @@ fun TitleDetailsScreen(
             item { Spacer(Modifier.height(24.dp)) }
         }
 
-        // Where-to-watch: shown only when TMDB was actually asked
-        // (title has a TMDB id and the user saved a key). An empty
-        // answer gets an honest line, not a blank space.
-        state.watchProviders?.let { watch ->
-            item { SectionHeading("Where to watch") }
-            item {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                ) {
-                    if (watch.providers.isEmpty()) {
-                        Text(
-                            text = "No official streaming, rental or purchase " +
-                                "options are listed for this title in " +
-                                "${watch.region} yet.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        watch.providers.forEach { provider ->
-                            WatchProviderRow(
-                                provider = provider,
-                                watchPageUrl = watch.watchPageUrl,
-                                onOpenWatchPage = onOpenWatchPage
-                            )
-                        }
-                        Text(
-                            text = "In ${watch.region}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-            item { Spacer(Modifier.height(24.dp)) }
-        }
-
-        // No-key guidance (cycle 14, first-run audit): with no TMDB
-        // key saved, TMDB was never asked, so the section above is
-        // absent for EVERY title — and a missing headline feature
-        // with no explanation reads as broken. One honest line in
-        // its place; with a key saved this never renders (a keyed
-        // fetch that finds nothing keeps the section's own honest
-        // empty answer, and a keyed title TMDB can't resolve keeps
-        // today's silence — only the provable no-key case speaks).
-        if (state.watchProviders == null && !state.hasTmdbKey && !state.isLoading) {
-            item { SectionHeading("Where to watch") }
-            item {
-                Text(
-                    text = "Where to watch isn't available right now.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-            item { Spacer(Modifier.height(24.dp)) }
-        }
-
         // More like this (cycle 10): TMDB's recommendations for
         // this title, as ordinary poster cards — tapping one opens
         // that title's page. Absent entirely when TMDB has none.
@@ -427,76 +365,6 @@ fun TitleDetailsScreen(
             item { Spacer(Modifier.height(24.dp)) }
         }
 
-        item { SectionHeading("Sources") }
-        item {
-            when {
-                state.playableFiles.isNotEmpty() -> {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    ) {
-                        state.playableFiles.forEach { file ->
-                            SourceRow(file = file)
-                        }
-                        Text(
-                            text = "Internet Archive",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                state.cloudServers.isNotEmpty() -> {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    ) {
-                        state.cloudServers.forEachIndexed { idx, server ->
-                            val label = server.qualityLabel ?: "Server ${idx + 1}"
-                            StreamServerRow(
-                                serverName = "${idx + 1}. $label",
-                                badge = if (server.url == state.selectedServerUrl) "Selected • Auto HD" else "Backup HD",
-                                onClick = {
-                                    if (state.title.isReleased(java.time.LocalDate.now().toString())) {
-                                        viewModel.selectServer(server.url)
-                                        triggerPlay(
-                                            state.title,
-                                            emptyList(),
-                                            null,
-                                            state.upNextQueue,
-                                            server.url
-                                        )
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-                state.title.youtubeId != null -> {
-                    Text(
-                        text = "YouTube",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                }
-                state.filesCheckFailed -> {
-                    Text(
-                        text = "Couldn't reach the servers. Tap Retry.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                }
-                else -> {
-                    Text(
-                        text = "Catalogue entry — no stream attached yet.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                }
-            }
-        }
     }
 
         // FIXED back button: overlay above the scrolling content, so
@@ -1102,35 +970,6 @@ private fun DetailsHeader(
                 }
             }
 
-            // Quick Multi-Server Selector strip for cloud-streamable titles
-            if (state.cloudServers.size > 1) {
-                Spacer(Modifier.height(14.dp))
-                Text(
-                    text = "Streaming Server (${state.cloudServers.size} HD Servers Ready)",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = WatchlyGoldLight
-                )
-                Spacer(Modifier.height(6.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(state.cloudServers, key = { it.url }) { server ->
-                        val isSelected = server.url == state.selectedServerUrl
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { onSelectServer(server.url) },
-                            label = {
-                                Text(server.qualityLabel ?: "Server")
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = WatchlyGold,
-                                selectedLabelColor = Color(0xFF1A1405),
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            modifier = Modifier.heightIn(min = 44.dp)
-                        )
-                    }
-                }
-            }
         }
     }
 }
@@ -1322,81 +1161,6 @@ private fun EpisodeRow(
 }
 
 @Composable
-private fun WatchProviderRow(
-    provider: WatchProvider,
-    watchPageUrl: String?,
-    onOpenWatchPage: (String) -> Unit = {}
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .then(
-                if (watchPageUrl != null) {
-                    Modifier.clickable {
-                        // TMDB supplies one watch page per title +
-                        // region (JustWatch-powered); it opens IN-APP
-                        // (Phase D) via the nav layer's browser.
-                        onOpenWatchPage(watchPageUrl)
-                    }
-                } else {
-                    Modifier
-                }
-            )
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surface),
-            contentAlignment = Alignment.Center
-        ) {
-            if (provider.logoUrl != null) {
-                AsyncImage(
-                    model = provider.logoUrl,
-                    // Decorative: the provider's name is rendered as
-                    // text right beside the logo — a matching image
-                    // description would be spoken twice (Test Lab
-                    // content labeling, cycle 6).
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Text(
-                    text = provider.name.take(1).uppercase(),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = WatchlyGold
-                )
-            }
-        }
-        Spacer(Modifier.width(10.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = provider.name,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = provider.category.label,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        if (watchPageUrl != null) {
-            Text(
-                text = "Open",
-                style = MaterialTheme.typography.labelLarge,
-                color = WatchlyGold
-            )
-        }
-    }
-}
-
-@Composable
 internal fun SourceRow(file: PlayableFile) {
     // Cycle 14 (run 13 labeling tip): a title's rows all spoke just
     // "Internet Archive" (14 examples in one crawl) though they
@@ -1445,44 +1209,3 @@ internal fun SourceRow(file: PlayableFile) {
     }
 }
 
-@Composable
-private fun StreamServerRow(
-    serverName: String,
-    badge: String,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = Icons.Filled.PlayArrow,
-            contentDescription = null,
-            tint = WatchlyGold,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = serverName,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "Tap to stream in HD",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Text(
-            text = badge,
-            style = MaterialTheme.typography.labelMedium,
-            color = WatchlyGold
-        )
-    }
-}

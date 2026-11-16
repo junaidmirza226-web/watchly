@@ -244,49 +244,11 @@ class PlayerViewModel(
             val season = seasonEp?.first
             val episode = seasonEp?.second
 
-            // Fast-path (<50ms): if this is a TMDB/IMDb cloud title (and not a local/Archive file),
-            // build the instant server list immediately so video opens with zero multi-second stall!
-            if (request.title.archiveId == null &&
-                request.title.localUri == null &&
-                (request.title.tmdbId != null || request.title.imdbId != null)
-            ) {
-                val instantServers = com.watchly.app.data.remote.providers.StreamAggregator
-                    .getInstantEmbedServers(
-                        title = request.title,
-                        season = season,
-                        episode = episode,
-                        context = appContext
-                    )
-                    .map { s ->
-                        PlayableFile(
-                            url = s.url,
-                            fileName = "${request.title.name} (${s.providerName})",
-                            format = "EMBED",
-                            qualityLabel = s.providerName,
-                            headers = s.headers
-                        )
-                    }
-                if (instantServers.isNotEmpty()) {
-                    // Prefer the source that worked last time (one-tap
-                    // "it just plays"), then the caller's pick, then best.
-                    val remembered = playback.getQualityUrl(scopedKey)
-                    val chosenUrl = request.preferredEmbedUrl
-                        ?.takeIf { pref -> instantServers.any { it.url == pref } }
-                        ?: instantServers.firstOrNull { it.url == remembered }?.url
-                        ?: instantServers.first().url
-                    _uiState.update {
-                        it.copy(
-                            webEmbedUrl = chosenUrl,
-                            embedServers = instantServers,
-                            files = instantServers,
-                            isBuffering = false,
-                            errorMessage = null
-                        )
-                    }
-                    recordCloudStreamProgress(request.title, request.episodeLabel)
-                    return
-                }
-            }
+            // Resolve REAL playable files first (MovieBox parity): probe
+            // the multi-source aggregator and play direct media natively.
+            // Web embeds are the fallback when nothing better exists —
+            // never the first hop, or every title lands in embed-loading
+            // roulette instead of actual playback.
 
             _uiState.update { it.copy(isBuffering = true, errorMessage = null) }
             viewModelScope.launch {
@@ -295,14 +257,18 @@ class PlayerViewModel(
                 val directFiles = resolved.files.filter { it.format != "EMBED" }
 
                 if (directFiles.isNotEmpty() && request.preferredEmbedUrl == null) {
+                    // The file that worked last time plays first — instant
+                    // resume, then the rest ranked best-first.
+                    val rememberedDirect = playback.getQualityUrl(scopedKey)
+                    val orderedDirects = directFiles.sortedByDescending { it.url == rememberedDirect }
                     _uiState.update {
                         it.copy(
-                            files = directFiles,
+                            files = orderedDirects,
                             embedServers = embeds,
                             isBuffering = false
                         )
                     }
-                    startWithFiles(directFiles)
+                    startWithFiles(orderedDirects)
                 } else if (resolved.webEmbedUrl != null || request.preferredEmbedUrl != null) {
                     // Start on the source that worked last time when it is
                     // still on the server list — one-tap "it just plays".
