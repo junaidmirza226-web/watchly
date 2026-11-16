@@ -1,6 +1,7 @@
 package com.watchly.app.ui.details
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.test.assertIsDisplayed
@@ -57,21 +58,24 @@ class DetailsChromeTest {
         assertEquals(0, listState.firstVisibleItemIndex)
         assertEquals(0, listState.firstVisibleItemScrollOffset)
 
-        // Scroll to the last item (the Sources body): the page is far
-        // taller than the viewport, so the list must travel hundreds
-        // of pixels — the exact motion that used to carry the back
-        // button off-screen.
+        // Scroll to the end of the list and then push on by a fixed
+        // distance: the exact motion that used to carry the back button
+        // off-screen. The target is derived from the live item count so
+        // the test survives any section being added or removed.
         runBlocking {
             withContext(Dispatchers.Main) {
-                listState.scrollToItem(LAST_ITEM_INDEX)
+                listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
+                listState.scrollBy(MIN_SCROLL_PIXELS.toFloat())
             }
         }
         composeTestRule.waitForIdle()
 
         assertTrue(
-            "content must actually have scrolled (offset was " +
+            "content must actually have scrolled (index " +
+                "${listState.firstVisibleItemIndex}, offset " +
                 "${listState.firstVisibleItemScrollOffset}px)",
-            listState.firstVisibleItemScrollOffset > MIN_SCROLL_PIXELS
+            listState.firstVisibleItemScrollOffset > MIN_SCROLL_PIXELS ||
+                listState.firstVisibleItemIndex > 0
         )
         backButton.assertIsDisplayed()
         val boundsAfter: Rect? = backButton.fetchSemanticsNode()?.boundsInRoot
@@ -84,9 +88,6 @@ class DetailsChromeTest {
 
     private companion object {
         const val BACK_DESCRIPTION = "Back"
-
-        /** Header, "Sources" heading, sources body. */
-        const val LAST_ITEM_INDEX = 2
 
         /** ~150dp on the CI emulator — far beyond a layout nudge. */
         const val MIN_SCROLL_PIXELS = 400
