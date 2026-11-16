@@ -140,14 +140,14 @@ class PlayerSubtitlesTest {
     }
 
     @Test
-    fun `without a key the picker explains where to add it`() = runTest(dispatcher) {
+    fun `without a key the picker explains subtitles are unavailable`() = runTest(dispatcher) {
         val viewModel = viewModel()
         viewModel.openSubtitles()
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
         assertTrue(state.subtitlesOpen)
-        assertTrue(state.subtitleMessage!!.contains("API Keys"))
+        assertTrue(state.subtitleMessage!!.contains("unavailable"))
         assertTrue(state.subtitleResults.isEmpty())
     }
 
