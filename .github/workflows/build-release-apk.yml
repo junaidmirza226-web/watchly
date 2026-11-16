@@ -67,6 +67,13 @@ jobs:
           echo "RELEASE_KEYSTORE_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
           keytool -list -keystore signing/watchly.jks -storepass "$RELEASE_KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" | head -n 5
 
+      - name: Compute per-build version (for in-app updates)
+        run: |
+          # Monotonic: every build installs over the previous one and the
+          # in-app updater sees it as strictly newer (1.5.1.<run>).
+          echo "BUILD_VERSION_CODE=$((1000000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+          echo "BUILD_VERSION_NAME=1.5.1.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+
       - name: Build Release APK
         env:
           # Master API keys are injected from repo secrets at build time and
@@ -103,6 +110,23 @@ jobs:
         with:
           name: watchly-apk
           path: release-output/watchly.apk
+
+      - name: Publish release for in-app updates
+        if: github.ref_type == 'branch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # One release per build (v1.5.1.<run>): the app polls
+          # /releases/latest, sees a strictly newer version, and offers the
+          # one-tap download-and-install. Tag builds keep the manual release
+          # step below; branch builds always refresh this one.
+          TAG="v$BUILD_VERSION_NAME"
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" release-output/watchly.apk \
+            --title "Watchly $BUILD_VERSION_NAME" \
+            --notes "Automatic build $BUILD_VERSION_NAME (workflow run $GITHUB_RUN_NUMBER). Installs over the previous version — settings, library and downloads carry over." \
+            --latest
+          gh release view "$TAG" --json tagName,assets --jq '{tag: .tagName, assets: [.assets[].name]}'
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

@@ -1,14 +1,19 @@
 package com.watchly.app.data.remote
 
 import android.content.Context
+import androidx.core.content.FileProvider
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
@@ -69,19 +74,8 @@ object AppUpdateChecker {
                     val bodyNotes = json.optString("body", "")
                     val htmlUrl = json.optString("html_url", "")
 
-                    // Look for .apk asset download URL first, fallback to release HTML URL
-                    var downloadUrl = htmlUrl
-                    val assets = json.optJSONArray("assets")
-                    if (assets != null) {
-                        for (i in 0 until assets.length()) {
-                            val asset = assets.optJSONObject(i) ?: continue
-                            val assetName = asset.optString("name", "")
-                            if (assetName.endsWith(".apk", ignoreCase = true)) {
-                                downloadUrl = asset.optString("browser_download_url", htmlUrl)
-                                break
-                            }
-                        }
-                    }
+                    // APK asset download URL first, release page as fallback.
+                    val downloadUrl = pickApkAsset(json) ?: htmlUrl
 
                     val info = AppUpdateInfo(
                         currentVersion = installedVersion,
@@ -114,8 +108,9 @@ object AppUpdateChecker {
     }.getOrNull()?.takeIf { it.isNotBlank() }
 
     /**
-     * Compares semantic versions (e.g. "1.4.2" vs "1.5.0" or "1.4.10").
-     * Returns true if [remote] is strictly newer than [current].
+     * Compares semantic versions (e.g. "1.4.2" vs "1.5.0", "1.4.10",
+     * or per-build "1.5.1.37"). Returns true if [remote] is strictly
+     * newer than [current].
      */
     fun isNewerVersion(current: String, remote: String): Boolean {
         val currParts = current.removePrefix("v").split(".").mapNotNull { it.toIntOrNull() }
@@ -129,6 +124,132 @@ object AppUpdateChecker {
             if (r < c) return false
         }
         return false
+    }
+
+    /** Picks the APK asset download URL from a release JSON (watchly.apk first). */
+    fun pickApkAsset(releaseJson: JSONObject): String? {
+        val assets = releaseJson.optJSONArray("assets") ?: return null
+        var generic: String? = null
+        for (i in 0 until assets.length()) {
+            val asset = assets.optJSONObject(i) ?: continue
+            val name = asset.optString("name", "")
+            if (!name.endsWith(".apk", ignoreCase = true)) continue
+            val url = asset.optString("browser_download_url", "")
+            if (url.isBlank()) continue
+            if (name.contains("watchly", ignoreCase = true)) return url
+            if (generic == null) generic = url
+        }
+        return generic
+    }
+
+    // ------------------------------------------------------------------
+    // One-tap update: download the APK, hand it to the system installer.
+    // (Sideloaded apps can't install fully silently — the system's
+    // "Install" confirmation is the one tap.)
+    // ------------------------------------------------------------------
+
+    sealed interface InstallState {
+        data object Idle : InstallState
+        data class Downloading(val percent: Int? = null) : InstallState
+        data object Installing : InstallState
+        data class Error(val message: String) : InstallState
+    }
+
+    private val _installState = MutableStateFlow<InstallState>(InstallState.Idle)
+    val installState: StateFlow<InstallState> = _installState.asStateFlow()
+
+    private val installScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Downloads [downloadUrl] and launches the system installer. Non-APK
+     * URLs (release pages) fall back to opening the browser.
+     */
+    fun startUpdate(context: Context, downloadUrl: String) {
+        if (!downloadUrl.endsWith(".apk", ignoreCase = true)) {
+            triggerInstall(context, downloadUrl)
+            return
+        }
+        if (_installState.value is InstallState.Downloading) return
+        val appContext = context.applicationContext
+        _installState.value = InstallState.Downloading(null)
+        installScope.launch {
+            try {
+                val dir = File(appContext.cacheDir, "updates").apply { mkdirs() }
+                val target = File(dir, "watchly-update.apk")
+                val request = Request.Builder()
+                    .url(downloadUrl)
+                    .header("User-Agent", "WatchlyApp/${currentVersion(appContext)} (Android)")
+                    .build()
+                httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw IllegalStateException("HTTP ${response.code}")
+                    }
+                    val body = response.body ?: throw IllegalStateException("Empty response")
+                    val total = body.contentLength().takeIf { it > 0 }
+                    body.byteStream().use { input ->
+                        target.outputStream().use { output ->
+                            val buffer = ByteArray(64 * 1024)
+                            var read = 0L
+                            while (true) {
+                                val n = input.read(buffer)
+                                if (n < 0) break
+                                output.write(buffer, 0, n)
+                                read += n
+                                if (total != null) {
+                                    _installState.value =
+                                        InstallState.Downloading(((read * 100) / total).toInt())
+                                }
+                            }
+                        }
+                    }
+                }
+                installApk(appContext, target)
+            } catch (t: Throwable) {
+                _installState.value = InstallState.Error(
+                    t.message ?: "Download failed — try again."
+                )
+            }
+        }
+    }
+
+    /** Hands [apk] to the system installer (one "Install" tap for the user). */
+    fun installApk(context: Context, apk: File) {
+        if (android.os.Build.VERSION.SDK_INT >= 26 &&
+            !context.packageManager.canRequestPackageInstalls()
+        ) {
+            runCatching {
+                val settings = android.content.Intent(
+                    android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    android.net.Uri.parse("package:${context.packageName}")
+                ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(settings)
+            }
+            _installState.value = InstallState.Error(
+                "Allow installs from Watchly in the screen that opened, then tap Update again."
+            )
+            return
+        }
+        val uri = FileProvider.getUriForFile(
+            context,
+            context.packageName + ".fileprovider",
+            apk
+        )
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+            )
+        }
+        _installState.value = InstallState.Installing
+        runCatching { context.startActivity(intent) }.onFailure {
+            _installState.value = InstallState.Error("Couldn't open the installer.")
+        }
+    }
+
+    /** Resets the install status (after a failed attempt is abandoned). */
+    fun clearInstallState() {
+        _installState.value = InstallState.Idle
     }
 
     fun triggerInstall(context: android.content.Context, downloadUrl: String) {

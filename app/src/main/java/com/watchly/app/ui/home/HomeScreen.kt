@@ -189,6 +189,27 @@ private fun HomeContent(
     ) {
         updateInfo?.let { update ->
             item {
+                val installState by com.watchly.app.data.remote.AppUpdateChecker
+                    .installState.collectAsState()
+                val statusText = when (val s = installState) {
+                    is com.watchly.app.data.remote.AppUpdateChecker.InstallState.Downloading ->
+                        s.percent?.let { "Downloading update… $it%" } ?: "Downloading update…"
+                    com.watchly.app.data.remote.AppUpdateChecker.InstallState.Installing ->
+                        "Installing — confirm in the system dialog."
+                    is com.watchly.app.data.remote.AppUpdateChecker.InstallState.Error -> s.message
+                    com.watchly.app.data.remote.AppUpdateChecker.InstallState.Idle ->
+                        "Tap to download & install — no re-sideloading needed."
+                }
+                val buttonText = when (installState) {
+                    is com.watchly.app.data.remote.AppUpdateChecker.InstallState.Downloading ->
+                        "Downloading…"
+                    com.watchly.app.data.remote.AppUpdateChecker.InstallState.Installing ->
+                        "Installing…"
+                    is com.watchly.app.data.remote.AppUpdateChecker.InstallState.Error -> "Try again"
+                    com.watchly.app.data.remote.AppUpdateChecker.InstallState.Idle -> "Update"
+                }
+                val busy = installState is com.watchly.app.data.remote.AppUpdateChecker.InstallState.Downloading ||
+                    installState is com.watchly.app.data.remote.AppUpdateChecker.InstallState.Installing
                 Surface(
                     color = WatchlyGold.copy(alpha = 0.15f),
                     shape = RoundedCornerShape(10.dp),
@@ -207,21 +228,22 @@ private fun HomeContent(
                                 color = WatchlyGold
                             )
                             Text(
-                                text = "Tap to update Watchly automatically",
+                                text = statusText,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Button(
                             onClick = {
-                                com.watchly.app.data.remote.AppUpdateChecker.triggerInstall(
+                                com.watchly.app.data.remote.AppUpdateChecker.startUpdate(
                                     localContext,
                                     update.downloadUrl
                                 )
                             },
+                            enabled = !busy,
                             colors = watchlyGoldButtonColors()
                         ) {
-                            Text("Update")
+                            Text(buttonText)
                         }
                     }
                 }

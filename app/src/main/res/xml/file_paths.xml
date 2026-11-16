@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    In-app updater: the downloaded APK lives in cacheDir/updates and is
+    handed to the system installer through FileProvider.
+-->
+<paths>
+    <cache-path name="update-cache" path="updates/" />
+    <files-path name="update-files" path="updates/" />
+</paths>

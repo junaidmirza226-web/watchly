@@ -65,8 +65,12 @@ android {
         // v1.2.0 (cycle 10): backup/export, Data Saver, details depth — 120.
         // v1.3.0 (cycle 11): person pages (§3.3) — 130.
         // v1.4.0 (cycle 12): profiles (§8) — 140.
-        versionCode = 151
-        versionName = "1.5.1"
+        versionCode = (System.getenv("BUILD_VERSION_CODE") ?: "151").toIntOrNull() ?: 151
+        // Per-build versioning for the in-app updater: CI passes a monotonic
+        // BUILD_VERSION_CODE / BUILD_VERSION_NAME (e.g. 1.5.1.37) so every
+        // build installs over the last and the update banner compares true.
+        // Local builds fall back to the fixed release values.
+        versionName = System.getenv("BUILD_VERSION_NAME") ?: "1.5.1"
         // Master keys — injected at build time, never committed (see above).
         buildConfigField("String", "MASTER_TMDB_KEY", "\"${watchlySecret("MASTER_TMDB_KEY")}\"")
         buildConfigField("String", "MASTER_OMDB_KEY", "\"${watchlySecret("MASTER_OMDB_KEY")}\"")

@@ -10,6 +10,9 @@
          Declared only — no runtime prompt is raised in the player
          (see PlayerMediaSession.kt for why). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- In-app updater: installing an APK the app downloaded itself needs
+         this on API 26+ (the user grants "allow from this source" once). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".WatchlyApplication"
@@ -51,6 +54,18 @@
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"
             tools:node="merge" />
+
+        <!-- In-app updater: share the downloaded update APK with the system
+             installer (cacheDir/updates — see res/xml/file_paths.xml). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>
