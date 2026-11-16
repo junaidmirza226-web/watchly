@@ -89,7 +89,7 @@ data class BrowseUiState(
      * because TMDB failed — the grid then refines genres/industries client-side.
      */
     val fallbackMode: Boolean = false,
-    /** Movies tab only: no key saved — show the "add your key" note. */
+    /** Movies tab only: keyless build — show the "TMDB not searched" note. */
     val showTmdbPrompt: Boolean = false,
     /** Industry chips (Bollywood, Tollywood, Mollywood, South Indian, Hollywood, etc.). */
     val industries: List<Industry> = emptyList(),

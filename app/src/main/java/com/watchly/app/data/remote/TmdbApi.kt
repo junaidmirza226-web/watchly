@@ -1,5 +1,5 @@
 /*
- * Watchly — TMDB client (user-supplied API key, v3).
+ * Watchly — TMDB client (built-in master key, v3).
  *
  * TMDB is the self-updating catalogue database: community editors add
  * new films and shows daily across every industry — Hollywood,
@@ -8,10 +8,10 @@
  * never mirrors the database; it asks TMDB live, filtered by original
  * language for the industry rows.
  *
- * The API key belongs to the user (free TMDB signup). It is passed in
- * per call from TmdbKeyRepository — this object holds no key of its
- * own and there is no key anywhere in the source. Calls happen only
- * when a key exists; without one the UI hides TMDB sections.
+ * The API key comes in per call from TmdbKeyRepository — the built-in
+ * master pool, overridable per device. This object holds no key of its
+ * own. A rejected key rotates through the built-in pool before the
+ * call fails; without any key the UI falls back to the keyless sources.
  *
  * ASSUMPTIONS (same stack as TvMazeApi / ArchiveApi):
  *  - HTTP: java.net.HttpURLConnection. JSON: org.json.

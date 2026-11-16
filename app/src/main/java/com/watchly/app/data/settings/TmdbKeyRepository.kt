@@ -1,9 +1,10 @@
 /*
  * Watchly — the user's TMDB API key, stored on-device only.
  *
- * Supported by the master key provided for zero-setup modern blockbusters,
- * TV series, and multi-industry browsing (Bollywood, Tollywood, Punjabi, etc.).
- * Users can also override with their own key in Settings.
+ * Supported by the master key baked into release builds for zero-setup
+ * modern blockbusters, TV series, and multi-industry browsing
+ * (Bollywood, Tollywood, Punjabi, etc.). There is no in-app key
+ * management — the built-in pool simply works.
  */
 package com.watchly.app.data.settings
 

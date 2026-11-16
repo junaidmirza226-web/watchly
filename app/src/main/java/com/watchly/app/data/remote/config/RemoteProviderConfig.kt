@@ -36,10 +36,16 @@ object RemoteProviderConfig {
     @Volatile
     private var memoryCachedProviders: List<ProviderEntry>? = null
 
-    /** Zero-setup master TMDB key (build-secret injected; blank when none). */
+    /** Zero-setup master TMDB key (build-secret injected; blank when none).
+     *  Holds the PRIMARY key only — the full rotation pool lives in
+     *  [com.watchly.app.data.remote.TmdbApi.fallbackKeyCandidates]; callers
+     *  embed this value straight into `api_key=`, so it must never contain
+     *  the comma-joined pool. */
     @Volatile
     var tmdbApiKey: String? = com.watchly.app.BuildConfig.MASTER_TMDB_KEY
-        .takeIf { it.isNotBlank() }
+        .split(',')
+        .map { it.trim() }
+        .firstOrNull { it.isNotBlank() }
 
     /**
      * Bundled fallback provider list embedded directly in the app.

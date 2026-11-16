@@ -8,8 +8,9 @@
 # Android Tests run first (the compare PNGs are uploaded as artifacts).
 #
 # Run manually from the Actions tab. It commits the re-recorded goldens
-# back to main; that push re-runs the normal Android Tests gate, which
-# verifies the new goldens and runs the emulator + Maestro journeys.
+# back to the branch it was dispatched on; that push re-runs the normal
+# Android Tests gate, which verifies the new goldens and runs the
+# emulator + Maestro journeys.
 # =============================================================================
 
 name: Re-record Screenshot Goldens

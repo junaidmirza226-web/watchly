@@ -8,7 +8,7 @@
  * on-device for a week (see OmdbCache) — a title's ratings change
  * slowly, and repeat visits never spend quota.
  *
- * The key is the user's own (Settings → API Keys), sent as the
+ * The key is the built-in master key (baked at build time), sent as the
  * `apikey` query parameter. Never logged. Fail-soft throughout: a
  * missing key, a spent quota (HTTP 401 "Request limit reached!") or
  * any network failure simply means "no extra ratings to show".
