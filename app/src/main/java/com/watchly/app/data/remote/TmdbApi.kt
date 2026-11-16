@@ -937,7 +937,8 @@ object TmdbApi {
             },
             status = if (detailed) movie.optText("status") else null,
             backdropUrl = imageUrl(movie.optText("backdrop_path"), "w780"),
-            originalLanguage = movie.optText("original_language")?.takeIf { it.isNotBlank() }
+            originalLanguage = movie.optText("original_language")?.takeIf { it.isNotBlank() },
+            releaseDate = releaseDate?.takeIf { it.isNotBlank() }
         )
     }
 
@@ -970,7 +971,8 @@ object TmdbApi {
             year = firstAirDate?.takeIf { it.length >= 4 }?.substring(0, 4),
             genres = genres,
             backdropUrl = imageUrl(tv.optText("backdrop_path"), "w780"),
-            originalLanguage = tv.optText("original_language")?.takeIf { it.isNotBlank() }
+            originalLanguage = tv.optText("original_language")?.takeIf { it.isNotBlank() },
+            releaseDate = firstAirDate?.takeIf { it.isNotBlank() }
         )
     }
 
@@ -1028,7 +1030,8 @@ object TmdbApi {
             runtimeMinutes = runtime,
             status = tv.optText("status"),
             backdropUrl = imageUrl(tv.optText("backdrop_path"), "w780"),
-            originalLanguage = tv.optText("original_language")?.takeIf { it.isNotBlank() }
+            originalLanguage = tv.optText("original_language")?.takeIf { it.isNotBlank() },
+            releaseDate = firstAirDate?.takeIf { it.isNotBlank() }
         )
         return TvDetailsBundle(title = title, seasonNumbers = seasons.distinct().sorted())
     }

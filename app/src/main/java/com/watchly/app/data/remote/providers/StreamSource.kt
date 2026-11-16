@@ -16,7 +16,14 @@ data class StreamSource(
     val quality: String,
     val isHls: Boolean = false,
     val headers: Map<String, String> = emptyMap(),
-    val subtitles: List<StreamSubtitle> = emptyList()
+    val subtitles: List<StreamSubtitle> = emptyList(),
+    /**
+     * Audio language of this stream when it is a specific dub ("Hindi",
+     * "Tamil", "Dual Audio"…), from the provider's own labels/URLs.
+     * Null for the default/original-audio stream. Dubbed variants are
+     * surfaced as separate, clearly-labelled sources in the player.
+     */
+    val language: String? = null
 )
 
 /**

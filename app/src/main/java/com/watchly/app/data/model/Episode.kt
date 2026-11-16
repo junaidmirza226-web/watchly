@@ -34,6 +34,17 @@ data class Episode(
     /** "S1 E4" style label used in the episode list. */
     val label: String
         get() = "S$season E$number"
+
+    /**
+     * True when this episode has already aired. [today] is "yyyy-MM-dd";
+     * a future [airDate] means the episode is not out yet and must not
+     * offer playback. Unknown air date = aired (never hide Play on a
+     * maybe).
+     */
+    fun isAired(today: String): Boolean {
+        val date = airDate?.takeIf { it.length >= 10 } ?: return true
+        return date <= today
+    }
 }
 
 /**

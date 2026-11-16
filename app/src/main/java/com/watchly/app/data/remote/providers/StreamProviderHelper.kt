@@ -122,4 +122,37 @@ object StreamProviderHelper {
         }
         return results
     }
+
+    /**
+     * Detects the dubbed-audio variant a stream belongs to from any
+     * label/URL text the provider supplied ("hindi", "dual audio", …).
+     * Null = default/original audio. A dual/multi-audio marker wins over
+     * a single language name (it describes the file's actual contents),
+     * and markers never match inside unrelated words ("gradual").
+     */
+    fun detectAudioLanguage(text: String): String? {
+        val lower = text.lowercase()
+        for ((marker, label) in AUDIO_LANGUAGE_MARKERS) {
+            if (lower.contains(marker)) return label
+        }
+        return null
+    }
+
+    private val AUDIO_LANGUAGE_MARKERS = listOf(
+        "dual audio" to "Dual Audio",
+        "multi audio" to "Dual Audio",
+        "dual-" to "Dual Audio",
+        "-dual" to "Dual Audio",
+        "dual_" to "Dual Audio",
+        "_dual" to "Dual Audio",
+        "malayalam" to "Malayalam",
+        "kannada" to "Kannada",
+        "punjabi" to "Punjabi",
+        "bengali" to "Bengali",
+        "telugu" to "Telugu",
+        "tamil" to "Tamil",
+        "hindi" to "Hindi",
+        "urdu" to "Urdu",
+        "dubbed" to "Dubbed"
+    )
 }

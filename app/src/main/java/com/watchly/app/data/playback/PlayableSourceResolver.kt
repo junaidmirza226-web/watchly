@@ -114,6 +114,10 @@ object PlayableSourceResolver {
 
                 for (stream in combined) {
                     PlayableMediaHeaders.register(stream.url, stream.headers)
+                    // Dubbed variants get a clear language tag so "all
+                    // dubbed versions" are visible and pickable as their
+                    // own sources (e.g. "Hindi", "Dual Audio").
+                    val langTag = stream.language?.let { " • $it" } ?: ""
                     val isDirectStream = stream.url.contains(".m3u8", ignoreCase = true) ||
                         stream.url.contains(".mp4", ignoreCase = true) ||
                         stream.url.contains(".mkv", ignoreCase = true)
@@ -125,7 +129,7 @@ object PlayableSourceResolver {
                                 url = stream.url,
                                 fileName = "${effectiveTitle.name} (${stream.providerName})",
                                 format = "EMBED",
-                                qualityLabel = stream.providerName,
+                                qualityLabel = "${stream.providerName}$langTag",
                                 headers = stream.headers
                             )
                         )
@@ -135,7 +139,7 @@ object PlayableSourceResolver {
                                 url = stream.url,
                                 fileName = "${effectiveTitle.name} (${stream.providerName} - ${stream.quality})",
                                 format = if (stream.isHls) "HLS" else "MP4",
-                                qualityLabel = "${stream.quality} • ${stream.providerName}",
+                                qualityLabel = "${stream.quality} • ${stream.providerName}$langTag",
                                 headers = stream.headers
                             )
                         )

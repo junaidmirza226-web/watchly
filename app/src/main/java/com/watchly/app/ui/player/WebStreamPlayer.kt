@@ -374,14 +374,6 @@ fun WebStreamPlayerLayout(
                         style = MaterialTheme.typography.titleMedium,
                         color = WatchlyGoldLight
                     )
-                    if (servers.size > 1) {
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = "${servers.size} backup HD servers ready",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.65f)
-                        )
-                    }
                 }
             }
         }
@@ -438,11 +430,23 @@ fun WebStreamPlayerLayout(
                         )
                     }
                     Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = "Or tap Servers to pick one by hand.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.6f)
-                    )
+                    Surface(
+                        onClick = { serverSheetOpen = true },
+                        shape = RoundedCornerShape(999.dp),
+                        color = Color.Transparent,
+                        modifier = Modifier.border(
+                            1.dp,
+                            WatchlyGold.copy(alpha = 0.6f),
+                            RoundedCornerShape(999.dp)
+                        )
+                    ) {
+                        Text(
+                            text = "Switch source",
+                            modifier = Modifier.padding(horizontal = 32.dp, vertical = 12.dp),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = WatchlyGold
+                        )
+                    }
                 }
             }
         }
@@ -646,7 +650,7 @@ fun WebStreamPlayerLayout(
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                text = "Servers (${servers.size})",
+                                text = "Switch source",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = WatchlyGold
                             )
@@ -775,7 +779,7 @@ fun WebStreamPlayerLayout(
 }
 
 /** How long a source may sit "loading" before it counts as dead. */
-private const val LOAD_DEADLINE_MS = 30_000L
+private const val LOAD_DEADLINE_MS = 60_000L
 
 /**
  * True when a WebView load failure means the SOURCE itself is dead

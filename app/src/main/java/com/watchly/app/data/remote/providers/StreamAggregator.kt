@@ -225,6 +225,16 @@ object StreamAggregator {
                     .thenByDescending { qualityRank(it.quality) }
                     .thenBy { priorityMap[it.providerName] ?: 99 }
             )
+            .map { stream ->
+                // Tag dubbed-audio variants from the provider's own
+                // labels/URLs so they surface as clearly-marked sources.
+                stream.language?.let { stream }
+                    ?: stream.copy(
+                        language = StreamProviderHelper.detectAudioLanguage(
+                            "${stream.url} ${stream.quality} ${stream.providerName}"
+                        )
+                    )
+            }
     }
 
     private fun isDirectVideoUrl(url: String): Boolean =

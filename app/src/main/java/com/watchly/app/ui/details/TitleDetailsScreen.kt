@@ -456,14 +456,16 @@ fun TitleDetailsScreen(
                                 serverName = "${idx + 1}. $label",
                                 badge = if (server.url == state.selectedServerUrl) "Selected • Auto HD" else "Backup HD",
                                 onClick = {
-                                    viewModel.selectServer(server.url)
-                                    triggerPlay(
-                                        state.title,
-                                        emptyList(),
-                                        null,
-                                        state.upNextQueue,
-                                        server.url
-                                    )
+                                    if (state.title.isReleased(java.time.LocalDate.now().toString())) {
+                                        viewModel.selectServer(server.url)
+                                        triggerPlay(
+                                            state.title,
+                                            emptyList(),
+                                            null,
+                                            state.upNextQueue,
+                                            server.url
+                                        )
+                                    }
                                 }
                             )
                         }
@@ -756,6 +758,10 @@ private fun DetailsHeader(
     onRatingCommit: () -> Unit = {}
 ) {
     val title = state.title
+    val today = remember { java.time.LocalDate.now().toString() }
+    // Not-out-yet titles (future release/first-air date) must never show a
+    // live Play button — there is nothing to play.
+    val released = title.isReleased(today)
     Column {
         Box(
             modifier = Modifier
@@ -980,13 +986,13 @@ private fun DetailsHeader(
             ) {
                 // Phase D truth rule: the gold Play button is only
                 // ACTIVE when something can actually play (files, a
-                // YouTube video) or when tapping retries a failed
-                // files check. A catalogue-only title gets the grey,
+                // YouTube video) AND the title is actually out. A
+                // catalogue-only or unreleased title gets the grey,
                 // disabled form — never a live-looking button that
                 // only prints a note.
                 Button(
                     onClick = onPlay,
-                    enabled = true,
+                    enabled = released,
                     colors = watchlyGoldButtonColors(),
                     modifier = Modifier.weight(1f)
                 ) {
@@ -995,7 +1001,7 @@ private fun DetailsHeader(
                         contentDescription = null
                     )
                     Spacer(Modifier.width(4.dp))
-                    Text("Play")
+                    Text(if (released) "Play" else "Coming soon")
                 }
                 OutlinedButton(onClick = onToggleWatchlist) {
                     Text(
@@ -1218,10 +1224,12 @@ private fun EpisodeRow(
     onToggleWatched: () -> Unit,
     onPlay: () -> Unit
 ) {
+    // Episodes that have not aired yet must not pretend to be playable.
+    val aired = episode.isAired(java.time.LocalDate.now().toString())
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onPlay)
+            .clickable(enabled = aired, onClick = onPlay)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1240,19 +1248,21 @@ private fun EpisodeRow(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.65f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.PlayArrow,
-                        contentDescription = null,
-                        tint = WatchlyGold,
-                        modifier = Modifier.size(18.dp)
-                    )
+                if (aired) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.65f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.PlayArrow,
+                            contentDescription = null,
+                            tint = WatchlyGold,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
             Spacer(Modifier.width(12.dp))

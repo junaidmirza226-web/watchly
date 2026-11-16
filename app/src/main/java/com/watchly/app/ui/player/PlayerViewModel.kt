@@ -372,7 +372,7 @@ class PlayerViewModel(
                         webEmbedUrl = null,
                         files = direct,
                         fileIndex = 0,
-                        failoverNote = "Cloud servers failed — trying direct sources…",
+                        failoverNote = "Finding a working stream…",
                         embedReloadTick = it.embedReloadTick + 1
                     )
                 }
@@ -382,20 +382,20 @@ class PlayerViewModel(
             _uiState.update {
                 it.copy(
                     failoverNote = null,
-                    errorMessage = "Every source for “${state.title.name}” failed. " +
-                        "Tap Retry or pick a server."
+                    errorMessage = "Couldn't find a working stream for “${state.title.name}”. " +
+                        "Tap Retry or try another source."
                 )
             }
             return
         }
-        _uiState.update {
-            it.copy(
-                webEmbedUrl = next.url,
-                embedReloadTick = it.embedReloadTick + 1,
-                failoverNote = "This source failed — trying the next one…",
-                errorMessage = null
-            )
-        }
+                _uiState.update {
+                    it.copy(
+                        webEmbedUrl = next.url,
+                        embedReloadTick = it.embedReloadTick + 1,
+                        failoverNote = "Finding a working stream…",
+                        errorMessage = null
+                    )
+                }
     }
 
     /** Another full pass over the server list after everything failed. */

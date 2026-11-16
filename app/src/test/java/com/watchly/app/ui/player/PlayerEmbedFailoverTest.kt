@@ -133,7 +133,7 @@ class PlayerEmbedFailoverTest {
             vm.embedSourceFailed()
             var state = vm.uiState.value
             assertEquals(embedB.url, state.webEmbedUrl)
-            assertEquals("This source failed — trying the next one…", state.failoverNote)
+            assertEquals("Finding a working stream…", state.failoverNote)
             assertNull(state.errorMessage)
 
             vm.embedSourceFailed()

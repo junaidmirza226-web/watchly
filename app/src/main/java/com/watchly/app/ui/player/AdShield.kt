@@ -62,6 +62,18 @@ internal val AD_CLEAN_JS = """
       el.onclick = function(e) { e.preventDefault(); return false; };
     });
     var pending = null;
+    function isPlayerNode(el) {
+      try {
+        var p = el, depth = 0;
+        while (p && p.tagName && depth < 7) {
+          var pc = ((p.id || '') + ' ' + (p.className && p.className.baseVal !== undefined ? p.className.baseVal : (p.className || ''))).toLowerCase();
+          if (/player|jw-|jw_|plyr|html5|videojs|video-|hls|embed/.test(pc)) return true;
+          p = p.parentElement;
+          depth++;
+        }
+      } catch (e) {}
+      return false;
+    }
     function killAds() {
       try {
         var junk = /(^|[-_\s])(ad|ads|advert|advertisement|banner|sponsor|sponsored|popup|popunder|pop up|promo|preroll|pre-roll|overlay|interstitial|cookie|consent|gdpr|newsletter|pushopt|notification)([-_\s]|$)/i;
@@ -69,7 +81,11 @@ internal val AD_CLEAN_JS = """
           try {
             if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'SOURCE') return;
             if (el.tagName === 'VIDEO' || el.tagName === 'AUDIO') return;
-            if (el.querySelector('video')) return;
+            // Never hide a node that CONTAINS the player, nor any node
+            // inside a player container — ad cleanup must be structurally
+            // incapable of breaking playback.
+            if (el.querySelector('video') || el.querySelector('iframe')) return;
+            if (isPlayerNode(el)) return;
             if (el.tagName === 'IFRAME') {
               var src = (el.getAttribute('src') || '').toLowerCase();
               // Keep the player embeds; kill ad/sponsor iframes only.
@@ -90,7 +106,7 @@ internal val AD_CLEAN_JS = """
         // top of the video" banners) collapse away.
         document.querySelectorAll('body > *').forEach(function(el) {
           try {
-            if (el.querySelector('video')) return;
+            if (el.querySelector('video') || el.querySelector('iframe') || isPlayerNode(el)) return;
             var cs = window.getComputedStyle(el);
             var top = parseInt(cs.top || '999', 10);
             if ((cs.position === 'fixed' || cs.position === 'sticky') && top <= 0) {

@@ -59,8 +59,27 @@ data class Title(
     val runtimeMinutes: Int? = null,
     val status: String? = null,
     val backdropUrl: String? = null,
-    val originalLanguage: String? = null
+    val originalLanguage: String? = null,
+    /**
+     * Release / premiere date as "yyyy-MM-dd" (movie release_date, TV
+     * first_air_date). Null when unknown. Drives the "not out yet" rule:
+     * an unreleased title must never show a live Play button.
+     */
+    val releaseDate: String? = null
 ) {
+    /**
+     * True when this title is actually out. [today] is "yyyy-MM-dd".
+     * A future [releaseDate] means not released; when only [year] is
+     * known, a future year counts as not released. Unknown = released
+     * (catalogue data is incomplete; never hide Play on a maybe).
+     */
+    fun isReleased(today: String): Boolean {
+        val date = releaseDate?.takeIf { it.length >= 10 }
+        if (date != null) return date <= today
+        val y = year?.toIntOrNull() ?: return true
+        val todayYear = today.take(4).toIntOrNull() ?: return true
+        return y <= todayYear
+    }
     /** Best wide image for hero banners and landscape cards, falling back to [posterUrl]. */
     val heroImageUrl: String?
         get() = backdropUrl ?: posterUrl
