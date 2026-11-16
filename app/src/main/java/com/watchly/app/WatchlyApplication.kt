@@ -48,8 +48,11 @@ class WatchlyApplication : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
-        // Zero-setup TMDB catalog key: enables instant out-of-the-box browsing for real users
-        com.watchly.app.data.remote.config.RemoteProviderConfig.tmdbApiKey = "4f298a53e5522830c957e3bc1d007647"
+        // Zero-setup master keys come from BuildConfig (build-secret
+        // injected). Register them as the TMDB key rotation pool so a
+        // rejected stale key automatically falls through to the next.
+        com.watchly.app.data.remote.TmdbApi.fallbackKeyCandidates =
+            com.watchly.app.data.settings.TmdbKeyRepository.MASTER_TMDB_KEYS
 
         // Profiles (§8, cycle 12): first-run migration creates the
         // default "Profile 1" metadata. The data itself is not

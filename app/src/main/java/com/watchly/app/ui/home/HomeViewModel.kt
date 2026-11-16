@@ -59,6 +59,8 @@ data class HomeUiState(
     val anime: List<Title> = emptyList(),
     /** Per-industry TMDB rows (Bollywood, South Indian, Tollywood, Mollywood, Hollywood, etc.). */
     val industryRows: List<IndustryRow> = emptyList(),
+    /** User-safe reason the regional rows are missing/partial (TMDB failed). */
+    val industryRowsWarning: String? = null,
     val youtubeRows: List<NamedTitleRow> = emptyList(),
     val archiveRows: List<NamedTitleRow> = emptyList(),
     val traktRow: NamedTitleRow? = null,
@@ -325,37 +327,63 @@ class HomeViewModel(
 
             // Regional & Global Cinema rows (throttled to 4 concurrent calls so 2-core devices never spike)
             if (hasKey && apiKey != null) {
-                val gate = kotlinx.coroutines.sync.Semaphore(4)
-                val rows = INDUSTRIES.map { industry ->
-                    async {
-                        gate.acquire()
-                        try {
-                            runCatching {
-                                if (industry.languageCode.contains("|")) {
-                                    TmdbApi.discoverMoviesAdvanced(
-                                        apiKey = apiKey,
-                                        languageQuery = industry.languageCode,
-                                        page = 1
-                                    ).take(INDUSTRY_ROW_SIZE)
-                                } else {
-                                    TmdbApi.discoverMovies(
-                                        apiKey = apiKey,
-                                        language = industry.languageCode,
-                                        page = 1
-                                    ).take(INDUSTRY_ROW_SIZE)
-                                }
-                            }.getOrDefault(emptyList())
-                        } finally {
-                            gate.release()
-                        }
-                    }
-                }.mapIndexed { index, deferred ->
-                    IndustryRow(INDUSTRIES[index], deferred.await())
-                }.filter { it.titles.isNotEmpty() }
-                _uiState.update { it.copy(industryRows = rows) }
+                fetchIndustryRows(this, apiKey)
             } else {
                 _uiState.update { it.copy(industryRows = emptyList()) }
             }
+        }
+    }
+
+    /** Re-attempt just the regional rows after a failure (banner Retry). */
+    fun retryIndustryRows() {
+        val apiKey = tmdbKeys?.getKey() ?: return
+        _uiState.update { it.copy(industryRowsWarning = null) }
+        viewModelScope.launch { fetchIndustryRows(this, apiKey) }
+    }
+
+    /**
+     * Loads the 14 regional cinema rows. Multi-language industries fan out
+     * per language inside [TmdbApi.discoverMovies] — TMDB answers HTTP 422
+     * to pipe lists like "te|ta|ml|kn". When rows come back missing a
+     * user-safe reason is published instead of a silently empty section.
+     */
+    private suspend fun fetchIndustryRows(
+        scope: kotlinx.coroutines.CoroutineScope,
+        apiKey: String
+    ) {
+        val gate = kotlinx.coroutines.sync.Semaphore(4)
+        val firstFailure = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
+        val rows = INDUSTRIES.map { industry ->
+            scope.async {
+                gate.acquire()
+                try {
+                    runCatching {
+                        TmdbApi.discoverMovies(
+                            apiKey = apiKey,
+                            language = industry.languageCode,
+                            page = 1
+                        ).take(INDUSTRY_ROW_SIZE)
+                    }.onFailure { err ->
+                        firstFailure.compareAndSet(null, err)
+                    }.getOrDefault(emptyList())
+                } finally {
+                    gate.release()
+                }
+            }
+        }.mapIndexed { index, deferred ->
+            IndustryRow(INDUSTRIES[index], deferred.await())
+        }.filter { it.titles.isNotEmpty() }
+        _uiState.update {
+            it.copy(
+                industryRows = rows,
+                industryRowsWarning = when {
+                    rows.isEmpty() && firstFailure.get() != null ->
+                        TmdbApi.describeTmdbFailure(firstFailure.get()!!)
+                    firstFailure.get() != null ->
+                        "Some industry rows couldn't load — tap Retry in a moment."
+                    else -> null
+                }
+            )
         }
     }
 

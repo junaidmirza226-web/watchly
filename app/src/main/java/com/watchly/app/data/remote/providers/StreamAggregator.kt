@@ -51,6 +51,16 @@ object StreamAggregator {
             }
 
         val sources = mutableListOf<StreamSource>()
+        // Branded consumer services first (Netflix, Amazon Prime Video,
+        // Disney+ Hotstar, Zee5 …) so Sources/Servers show what people look
+        // for; the raw embed hosts below stay as instant backups.
+        sources += OttServices.buildSources(
+            tmdbId = tmdbId,
+            imdbId = imdbId,
+            mediaType = title.mediaType,
+            season = season,
+            episode = episode
+        )
         for (entry in entries) {
             val embedUrl = buildEmbedUrlForEntry(
                 entry = entry,

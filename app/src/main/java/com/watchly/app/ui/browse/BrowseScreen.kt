@@ -235,6 +235,18 @@ fun BrowseScreen(
             onToggleIndustry = viewModel::toggleIndustry
         )
 
+        if (state.fallbackMode) {
+            // Honest provenance: TMDB failed, keyless sources are filling the
+            // grid and the filters are applied on-device.
+            Text(
+                text = "Fallback catalogue — TMDB unreachable or key rejected. " +
+                    "Filters applied on this device.",
+                style = MaterialTheme.typography.labelSmall,
+                color = WatchlyGoldLight.copy(alpha = 0.85f),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+            )
+        }
+
         when {
             state.isLoading -> ShimmerPosterGrid(
                 modifier = Modifier.fillMaxSize()

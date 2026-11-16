@@ -178,6 +178,22 @@ class MultiFilterAndStreamingTest {
                 TmdbApi.discoverMoviesAdvanced(
                     apiKey = "test-key",
                     languageQuery = "hi|te",
+                    // TMDB discover syntax: ANY = OR = comma-separated ids.
+                    genresQuery = "28,878",
+                    yearFilter = BrowseYearFilter.DECADE_2020S,
+                    minRating = 7.5,
+                    sort = any(),
+                    page = 1
+                )
+            }
+
+            // ALL mode = AND = pipe-joined ids (TMDB's pipe semantics).
+            vm.setGenreMatchMode(GenreMatchMode.ALL)
+            advanceUntilIdle()
+            coVerify {
+                TmdbApi.discoverMoviesAdvanced(
+                    apiKey = "test-key",
+                    languageQuery = "hi|te",
                     genresQuery = "28|878",
                     yearFilter = BrowseYearFilter.DECADE_2020S,
                     minRating = 7.5,

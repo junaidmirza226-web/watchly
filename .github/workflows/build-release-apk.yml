@@ -68,6 +68,14 @@ jobs:
           keytool -list -keystore signing/watchly.jks -storepass "$RELEASE_KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" | head -n 5
 
       - name: Build Release APK
+        env:
+          # Master API keys are injected from repo secrets at build time and
+          # never live in the repository (add them under Settings → Secrets).
+          MASTER_TMDB_KEY: ${{ secrets.MASTER_TMDB_KEY }}
+          MASTER_OMDB_KEY: ${{ secrets.MASTER_OMDB_KEY }}
+          MASTER_TRAKT_CLIENT_ID: ${{ secrets.MASTER_TRAKT_CLIENT_ID }}
+          MASTER_OPENSUBTITLES_KEY: ${{ secrets.MASTER_OPENSUBTITLES_KEY }}
+          MASTER_FANART_KEY: ${{ secrets.MASTER_FANART_KEY }}
         run: ./gradlew assembleRelease --stacktrace || ./gradlew assembleDebug --stacktrace
 
       - name: Prepare APK Asset

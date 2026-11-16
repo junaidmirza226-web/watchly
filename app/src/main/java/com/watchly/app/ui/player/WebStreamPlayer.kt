@@ -89,48 +89,8 @@ import com.watchly.app.ui.theme.WatchlySurfaceVariant
 import java.io.ByteArrayInputStream
 import kotlinx.coroutines.delay
 
-private val BLOCKED_AD_DOMAINS = listOf(
-    "doubleclick.net", "googlesyndication.com", "googleadservices.com",
-    "popads.net", "popcash.net", "propellerads.com", "adsterra.com",
-    "exoclick.com", "juicyads.com", "onclickads.net", "hilltopads.net",
-    "acscdn.com", "histats.com", "clickadu.com", "trafficjunky.net",
-    "adsco.re", "pushame.com", "richpush.co", "evadav.com", "galaksion.com",
-    "admaven.com", "monetag.com", "outbrain.com", "taboola.com",
-    "yandex.ru/metrika", "mc.yandex.ru", "bet365", "1xbet", "mostbet",
-    "melbet", "parimatch", "stake.com", "irtyc.com", "cdn4ads.com",
-    "usrpubtrk.com", "a-ads.com", "tsyndicate.com", "realsrv.com",
-    "syndication.realsrv.com", "zog.link", "rtmark.net", "cloudfront-ad"
-)
-
-private fun isBlockedAdUrl(url: String): Boolean {
-    val lower = url.lowercase()
-    return BLOCKED_AD_DOMAINS.any { lower.contains(it) } ||
-        lower.contains("/popunder") ||
-        lower.contains("/adscript") ||
-        lower.contains("pop.js") ||
-        lower.contains("ads.js")
-}
-
-private fun isSniffableDirectMedia(url: String): Boolean {
-    val lower = url.lowercase()
-    if (isBlockedAdUrl(lower)) return false
-    return (lower.contains(".m3u8") || lower.contains(".mp4")) &&
-        !lower.endsWith(".ts") &&
-        !lower.contains("preview") &&
-        !lower.contains("thumb")
-}
-
-private const val ANTI_POPUP_JS = """
-(function() {
-  try {
-    window.open = function() { return null; };
-    document.querySelectorAll('a[target="_blank"]').forEach(function(el) {
-      el.removeAttribute('target');
-      el.onclick = function(e) { e.preventDefault(); return false; };
-    });
-  } catch (e) {}
-})();
-"""
+// Ad/popup/banner shield lives in AdShield.kt (same package): network-level
+// domain blocking + DOM-level banner/overlay cleanup ([AD_CLEAN_JS]).
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -240,12 +200,12 @@ fun WebStreamPlayerLayout(
                             favicon: android.graphics.Bitmap?
                         ) {
                             super.onPageStarted(view, url, favicon)
-                            view?.evaluateJavascript(ANTI_POPUP_JS, null)
+                            view?.evaluateJavascript(AD_CLEAN_JS, null)
                         }
 
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
-                            view?.evaluateJavascript(ANTI_POPUP_JS, null)
+                            view?.evaluateJavascript(AD_CLEAN_JS, null)
                             isPageLoading = false
                         }
 

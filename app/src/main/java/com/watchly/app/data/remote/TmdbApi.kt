@@ -46,13 +46,21 @@ import com.watchly.app.data.model.WatchProvider
 import com.watchly.app.data.model.WatchProviders
 import com.watchly.app.data.model.combineWatchProviders
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStreamReader
+import java.net.ConnectException
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.URLEncoder
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
 
 object TmdbApi {
 
@@ -163,6 +171,21 @@ object TmdbApi {
         sort: MovieSort = MovieSort.POPULAR,
         page: Int = 1
     ): List<Title> = withContext(Dispatchers.IO) {
+        fanOutLanguages(language) { code ->
+            parseMovieList(
+                httpGet(movieDiscoverUrl(apiKey, code, genreId, sort, page))
+            )
+        }
+    }
+
+    /** Simple movie discover URL for exactly one language code (never a pipe list). */
+    internal fun movieDiscoverUrl(
+        apiKey: String,
+        language: String?,
+        genreId: Int?,
+        sort: MovieSort,
+        page: Int
+    ): String {
         val params = StringBuilder()
         params.append("?api_key=").append(apiKey.enc())
         params.append("&include_adult=false")
@@ -174,7 +197,7 @@ object TmdbApi {
             val minVotes = if (language.isNullOrBlank()) 100 else 10
             params.append("&vote_count.gte=").append(minVotes)
         }
-        parseMovieList(httpGet("$BASE_URL/discover/movie$params"))
+        return "$BASE_URL/discover/movie$params"
     }
 
     /**
@@ -187,16 +210,34 @@ object TmdbApi {
         sort: MovieSort = MovieSort.POPULAR,
         page: Int = 1
     ): List<Title> = withContext(Dispatchers.IO) {
+        parseTvList(httpGet(tvDiscoverUrl(apiKey, null, genreId, sort, page)))
+    }
+
+    /** Simple TV discover URL. [language] must be a single code or null. */
+    internal fun tvDiscoverUrl(
+        apiKey: String,
+        language: String?,
+        genreId: Int?,
+        sort: MovieSort,
+        page: Int
+    ): String {
+        val tvSortParam = when (sort) {
+            MovieSort.POPULAR -> "popularity.desc"
+            MovieSort.TOP_RATED -> "vote_average.desc"
+            MovieSort.NEWEST -> "first_air_date.desc"
+            MovieSort.A_Z -> "name.asc"
+        }
         val params = StringBuilder()
         params.append("?api_key=").append(apiKey.enc())
         params.append("&include_adult=false")
         params.append("&page=").append(page)
-        params.append("&sort_by=").append(sort.sortParam.enc())
+        params.append("&sort_by=").append(tvSortParam.enc())
+        language?.let { params.append("&with_original_language=").append(it.enc()) }
         genreId?.let { params.append("&with_genres=").append(it) }
         if (sort == MovieSort.TOP_RATED) {
             params.append("&vote_count.gte=100")
         }
-        parseTvList(httpGet("$BASE_URL/discover/tv$params"))
+        return "$BASE_URL/discover/tv$params"
     }
 
     /**
@@ -213,12 +254,37 @@ object TmdbApi {
         sort: MovieSort = MovieSort.POPULAR,
         page: Int = 1
     ): List<Title> = withContext(Dispatchers.IO) {
+        fanOutLanguages(languageQuery) { code ->
+            parseMovieList(
+                httpGet(
+                    movieDiscoverAdvancedUrl(
+                        apiKey, code, genresQuery, yearFilter, minRating, sort, page
+                    )
+                )
+            )
+        }
+    }
+
+    /**
+     * Advanced movie discover URL for exactly one language code (or null).
+     * Genre expressions use TMDB syntax: `80,16` = OR (ANY mode),
+     * `80|16` = AND (ALL mode) — see [com.watchly.app.data.browse.GenreMatchMode].
+     */
+    internal fun movieDiscoverAdvancedUrl(
+        apiKey: String,
+        language: String?,
+        genresQuery: String?,
+        yearFilter: BrowseYearFilter,
+        minRating: Double?,
+        sort: MovieSort,
+        page: Int
+    ): String {
         val params = StringBuilder()
         params.append("?api_key=").append(apiKey.enc())
         params.append("&include_adult=false")
         params.append("&page=").append(page)
         params.append("&sort_by=").append(sort.sortParam.enc())
-        languageQuery?.takeIf { it.isNotBlank() }?.let {
+        language?.takeIf { it.isNotBlank() }?.let {
             params.append("&with_original_language=").append(it.enc())
         }
         genresQuery?.takeIf { it.isNotBlank() }?.let {
@@ -234,10 +300,10 @@ object TmdbApi {
             params.append("&vote_average.gte=").append(it)
         }
         if (sort == MovieSort.TOP_RATED || minRating != null) {
-            val minVotes = if (languageQuery.isNullOrBlank()) 80 else 8
+            val minVotes = if (language.isNullOrBlank()) 80 else 8
             params.append("&vote_count.gte=").append(minVotes)
         }
-        parseMovieList(httpGet("$BASE_URL/discover/movie$params"))
+        return "$BASE_URL/discover/movie$params"
     }
 
     /**
@@ -253,6 +319,27 @@ object TmdbApi {
         sort: MovieSort = MovieSort.POPULAR,
         page: Int = 1
     ): List<Title> = withContext(Dispatchers.IO) {
+        fanOutLanguages(languageQuery) { code ->
+            parseTvList(
+                httpGet(
+                    tvDiscoverAdvancedUrl(
+                        apiKey, code, genresQuery, yearFilter, minRating, sort, page
+                    )
+                )
+            )
+        }
+    }
+
+    /** Advanced TV discover URL for exactly one language code (or null). */
+    internal fun tvDiscoverAdvancedUrl(
+        apiKey: String,
+        language: String?,
+        genresQuery: String?,
+        yearFilter: BrowseYearFilter,
+        minRating: Double?,
+        sort: MovieSort,
+        page: Int
+    ): String {
         val tvSortParam = when (sort) {
             MovieSort.POPULAR -> "popularity.desc"
             MovieSort.TOP_RATED -> "vote_average.desc"
@@ -264,7 +351,7 @@ object TmdbApi {
         params.append("&include_adult=false")
         params.append("&page=").append(page)
         params.append("&sort_by=").append(tvSortParam.enc())
-        languageQuery?.takeIf { it.isNotBlank() }?.let {
+        language?.takeIf { it.isNotBlank() }?.let {
             params.append("&with_original_language=").append(it.enc())
         }
         genresQuery?.takeIf { it.isNotBlank() }?.let {
@@ -280,10 +367,71 @@ object TmdbApi {
             params.append("&vote_average.gte=").append(it)
         }
         if (sort == MovieSort.TOP_RATED || minRating != null) {
-            val minVotes = if (languageQuery.isNullOrBlank()) 50 else 5
+            val minVotes = if (language.isNullOrBlank()) 50 else 5
             params.append("&vote_count.gte=").append(minVotes)
         }
-        parseTvList(httpGet("$BASE_URL/discover/tv$params"))
+        return "$BASE_URL/discover/tv$params"
+    }
+
+    /**
+     * TMDB's `with_original_language` accepts exactly one ISO 639-1 code —
+     * pipe/comma lists ("te|ta|ml|kn") make TMDB answer HTTP 422 and every
+     * industry row silently died. Multi-language selections fan out into one
+     * call per language and merge in stable order. When EVERY leg fails the
+     * first error is rethrown, so callers can tell "no results" apart from
+     * "catalogue unreachable".
+     */
+    private suspend fun fanOutLanguages(
+        languageQuery: String?,
+        call: suspend (String?) -> List<Title>
+    ): List<Title> {
+        val codes = splitLanguageQuery(languageQuery)
+        if (codes.size <= 1) return call(codes.firstOrNull())
+        val results = coroutineScope {
+            codes.map { code -> async { runCatching { call(code) } } }.awaitAll()
+        }
+        if (results.all { it.isFailure }) {
+            throw results.first().exceptionOrNull()!!
+        }
+        return results.flatMap { it.getOrDefault(emptyList()) }
+            .distinctBy { it.stableKey }
+    }
+
+    /** Splits "hi|te,ta" style multi-language queries into distinct codes. */
+    internal fun splitLanguageQuery(languageQuery: String?): List<String> =
+        languageQuery
+            ?.split('|', ',')
+            ?.map { it.trim().lowercase() }
+            ?.filter { it.isNotEmpty() }
+            ?.distinct()
+            ?: emptyList()
+
+    /**
+     * Human-readable, actionable failure reason for a TMDB load error.
+     * Distinguishes "key rejected" (get your own free key — it helps) from
+     * "TMDB unreachable from this network" (a key won't help; the fallback
+     * catalogue keeps working).
+     */
+    fun describeTmdbFailure(err: Throwable): String {
+        val msg = err.message ?: ""
+        return when {
+            err is UnknownHostException || err is ConnectException ||
+                err is SocketTimeoutException || err is SSLException ||
+                err is IOException ->
+                "Couldn't reach TMDB from this network. Watchly keeps using its " +
+                    "fallback catalogue — if TMDB is blocked on your network, " +
+                    "try another network."
+            msg.contains("TMDB HTTP 401") || msg.contains("TMDB HTTP 403") ->
+                "TMDB rejected the API key. Add your own free TMDB key to unlock " +
+                    "the full catalogue."
+            msg.contains("TMDB HTTP 429") ->
+                "TMDB is rate-limiting requests right now. Try again in a moment."
+            msg.contains("TMDB HTTP 5") ->
+                "TMDB servers are having trouble. Try again shortly."
+            msg.contains("No TMDB key") ->
+                "No TMDB key yet. Add your free TMDB key to unlock the full catalogue."
+            else -> "Couldn't load content. ${msg.take(120)}".trim()
+        }
     }
 
     /** Enriched TV show metadata + season list (`GET /tv/:id?append_to_response=external_ids`). */
@@ -932,20 +1080,54 @@ object TmdbApi {
         }
 
     private fun httpGet(urlString: String): String {
-        val connection = openConnection(urlString)
-        try {
-            val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val body = BufferedReader(InputStreamReader(stream, Charsets.UTF_8))
-                .use { it.readText() }
-            if (code !in 200..299) {
+        var url = urlString
+        val triedKeys = mutableListOf<String>()
+        while (true) {
+            val connection = openConnection(url)
+            try {
+                val code = connection.responseCode
+                val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                val body = BufferedReader(
+                    InputStreamReader(stream ?: java.io.ByteArrayInputStream(ByteArray(0)), Charsets.UTF_8)
+                ).use { it.readText() }
+                if (code in 200..299) return body
+                // A rejected key (401/403) falls through to the next master
+                // candidate before giving up — one stale built-in key must
+                // never blank the catalogue while a healthy one exists.
+                if (code == 401 || code == 403) {
+                    val currentKey = apiKeyFrom(url)
+                    val next = fallbackKeyCandidates.firstOrNull {
+                        it.isNotBlank() && it != currentKey && it !in triedKeys
+                    }
+                    if (next != null) {
+                        currentKey?.let { triedKeys.add(it) }
+                        url = withApiKey(url, next)
+                        continue
+                    }
+                }
                 throw IllegalStateException("TMDB HTTP $code: ${body.take(200)}")
+            } finally {
+                connection.disconnect()
             }
-            return body
-        } finally {
-            connection.disconnect()
         }
     }
+
+    /**
+     * Master-key rotation pool (build-secret injected). Tried in order when
+     * TMDB rejects the key a request was built with.
+     */
+    @Volatile
+    var fallbackKeyCandidates: List<String> = emptyList()
+
+    /** Returns [url] with its `api_key` parameter replaced by [key]. */
+    internal fun withApiKey(url: String, key: String): String =
+        url.replace(Regex("([?&]api_key=)[^&]*")) {
+            it.groupValues[1] + URLEncoder.encode(key, "UTF-8")
+        }
+
+    /** The `api_key` value embedded in [url], or null. */
+    internal fun apiKeyFrom(url: String): String? =
+        Regex("[?&]api_key=([^&]*)").find(url)?.groupValues?.get(1)
 
     private fun String.enc(): String = URLEncoder.encode(this, "UTF-8")
 }

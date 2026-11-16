@@ -6,8 +6,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.lifecycleScope
-import com.watchly.app.data.settings.ApiProvider
-import com.watchly.app.data.settings.ProviderKeysRepository
 import com.watchly.app.data.settings.TmdbKeyRepository
 import com.watchly.app.ui.nav.WatchlyApp
 import com.watchly.app.ui.player.PipState
@@ -19,28 +17,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Seed master TMDB, OMDb, Trakt, and OpenSubtitles keys on first launch
-        // so all blockbusters, Bollywood/Tollywood, ratings, and subtitles work out-of-the-box.
+        // Master keys are build-secret injected (BuildConfig) and resolved on
+        // demand by TmdbKeyRepository / ProviderKeysRepository — nothing is
+        // seeded into preferences here (a seeded prefs key used to outrank
+        // the cloud-updated one and freeze the app onto a stale key).
         runCatching {
-            val tmdbRepo = TmdbKeyRepository(applicationContext)
-            val currentKey = tmdbRepo.getKey()
-            if (currentKey.isNullOrBlank() || currentKey.length < 10) {
-                tmdbRepo.setKey(TmdbKeyRepository.DEFAULT_TMDB_API_KEY)
-            }
-
-            val providerRepo = ProviderKeysRepository(applicationContext)
-            if (!providerRepo.hasKey(ApiProvider.OMDB)) {
-                providerRepo.setKey(ApiProvider.OMDB, "3fe6e3fc")
-            }
-            if (!providerRepo.hasKey(ApiProvider.TRAKT)) {
-                providerRepo.setKey(ApiProvider.TRAKT, "2M3JfayN76tNAq_ppJw6ZXROTDmhsq9THc0pnuqfB6o")
-            }
-            if (!providerRepo.hasKey(ApiProvider.OPENSUBTITLES)) {
-                providerRepo.setKey(ApiProvider.OPENSUBTITLES, "nU9U21UXcHfxmOSCNUHZnFNb80zq0aa9")
-            }
-            if (!providerRepo.hasKey(ApiProvider.FANART)) {
-                providerRepo.setKey(ApiProvider.FANART, "42ab51ecdff1d6a6100d90fb4032cc9d")
-            }
+            com.watchly.app.data.remote.TmdbApi.fallbackKeyCandidates =
+                TmdbKeyRepository.MASTER_TMDB_KEYS
         }
 
         enableEdgeToEdge()

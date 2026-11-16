@@ -78,12 +78,21 @@ class ProviderKeysRepository(context: Context) {
         /** Same file as the TMDB key store — one settings store. */
         const val PREFS_NAME = TmdbKeyRepository.PREFS_NAME
 
-        /** Built-in master keys for out-of-the-box ratings, trending, subtitles, and HD artwork. */
-        val DEFAULT_KEYS: MutableMap<ApiProvider, String> = mutableMapOf(
-            ApiProvider.OMDB to "3fe6e3fc",
-            ApiProvider.TRAKT to "2M3JfayN76tNAq_ppJw6ZXROTDmhsq9THc0pnuqfB6o",
-            ApiProvider.OPENSUBTITLES to "nU9U21UXcHfxmOSCNUHZnFNb80zq0aa9",
-            ApiProvider.FANART to "42ab51ecdff1d6a6100d90fb4032cc9d"
-        )
+        /**
+         * Built-in master keys for out-of-the-box ratings, trending,
+         * subtitles, and HD artwork — build-secret injected, never
+         * committed (blank entries are simply absent).
+         */
+        val DEFAULT_KEYS: MutableMap<ApiProvider, String> =
+            mutableMapOf<ApiProvider, String>().apply {
+                com.watchly.app.BuildConfig.MASTER_OMDB_KEY
+                    .takeIf { it.isNotBlank() }?.let { put(ApiProvider.OMDB, it) }
+                com.watchly.app.BuildConfig.MASTER_TRAKT_CLIENT_ID
+                    .takeIf { it.isNotBlank() }?.let { put(ApiProvider.TRAKT, it) }
+                com.watchly.app.BuildConfig.MASTER_OPENSUBTITLES_KEY
+                    .takeIf { it.isNotBlank() }?.let { put(ApiProvider.OPENSUBTITLES, it) }
+                com.watchly.app.BuildConfig.MASTER_FANART_KEY
+                    .takeIf { it.isNotBlank() }?.let { put(ApiProvider.FANART, it) }
+            }
     }
 }

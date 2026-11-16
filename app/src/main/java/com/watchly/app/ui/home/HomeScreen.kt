@@ -249,6 +249,32 @@ private fun HomeContent(
             )
         }
 
+        // 1b. Regional rows warning (TMDB unreachable / key rejected): say so
+        // out loud instead of silently dropping the industry section.
+        state.industryRowsWarning?.let { warning ->
+            item(key = "industry-rows-warning") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .background(WatchlySurface, RoundedCornerShape(12.dp))
+                        .border(1.dp, WatchlyGold.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                        .padding(start = 12.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = warning,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = WatchlyGoldLight,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = onRetry) {
+                        Text("Retry", color = WatchlyGold)
+                    }
+                }
+            }
+        }
+
         // 2. Cinema Quick-Jump Hubs (Bollywood, South Indian, Tollywood, Mollywood, Hollywood, etc.)
         if (state.hasTmdbKey) {
             item { Spacer(Modifier.height(16.dp)) }

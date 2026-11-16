@@ -84,6 +84,11 @@ data class BrowseUiState(
     val hasMore: Boolean = true,
     /** TMDB is the catalogue source (key saved). */
     val tmdbActive: Boolean = false,
+    /**
+     * True when titles came from a keyless fallback (Cinemeta/TVMaze/Archive)
+     * because TMDB failed — the grid then refines genres/industries client-side.
+     */
+    val fallbackMode: Boolean = false,
     /** Movies tab only: no key saved — show the "add your key" note. */
     val showTmdbPrompt: Boolean = false,
     /** Industry chips (Bollywood, Tollywood, Mollywood, South Indian, Hollywood, etc.). */
@@ -134,15 +139,25 @@ data class BrowseUiState(
 
     /** The grid's titles: [titles] with playability + client-side refinements applied. */
     val visibleTitles: List<Title>
-        get() = applyAdvancedBrowseFilter(
-            titles = titles.filteredBy(playabilityFilter),
-            selectedGenres = if (kind == BrowseKind.SHOWS && !tmdbActive) selectedGenres else emptySet(),
-            genreMatchMode = genreMatchMode,
-            selectedIndustries = emptySet(),
-            yearFilter = yearFilter,
-            ratingFilter = ratingFilter,
-            sort = null
-        )
+        get() {
+            // Server-side filtering only ever happened while TMDB answered;
+            // on the keyless pipelines and the TMDB-failure fallback the
+            // client owns genre/industry refinement.
+            val clientFilters = fallbackMode || (kind == BrowseKind.SHOWS && !tmdbActive)
+            return applyAdvancedBrowseFilter(
+                titles = titles.filteredBy(playabilityFilter),
+                selectedGenres = if (clientFilters) selectedGenres else emptySet(),
+                genreMatchMode = genreMatchMode,
+                selectedIndustries = if (clientFilters) {
+                    selectedIndustries + listOfNotNull(selectedIndustry)
+                } else {
+                    emptySet()
+                },
+                yearFilter = yearFilter,
+                ratingFilter = ratingFilter,
+                sort = null
+            )
+        }
 
     /** True when loading finished and the grid is empty. */
     val isEmpty: Boolean
@@ -520,7 +535,8 @@ class BrowseViewModel(
         }
         val ids = genres.mapNotNull { TmdbApi.genreIdFor(it) }.distinct()
         if (ids.isEmpty()) return null
-        val sep = if (state.genreMatchMode == GenreMatchMode.ALL) "," else "|"
+        // TMDB discover syntax: `,` = OR (ANY mode), `|` = AND (ALL mode).
+        val sep = if (state.genreMatchMode == GenreMatchMode.ALL) "|" else ","
         return ids.joinToString(sep)
     }
 
@@ -530,7 +546,8 @@ class BrowseViewModel(
         }
         val ids = genres.mapNotNull { TmdbApi.tvGenreIdFor(it) }.distinct()
         if (ids.isEmpty()) return null
-        val sep = if (state.genreMatchMode == GenreMatchMode.ALL) "," else "|"
+        // TMDB discover syntax: `,` = OR (ANY mode), `|` = AND (ALL mode).
+        val sep = if (state.genreMatchMode == GenreMatchMode.ALL) "|" else ","
         return ids.joinToString(sep)
     }
 
@@ -541,8 +558,12 @@ class BrowseViewModel(
             state.yearFilter != BrowseYearFilter.ALL ||
             state.ratingFilter != BrowseRatingFilter.ANY
 
+    /** True while titles from a keyless fallback fill the grid (TMDB failed). */
+    private var fallbackEngaged = false
+
     private suspend fun loadServerPage(reset: Boolean) {
         val state = _uiState.value
+        if (reset) fallbackEngaged = false
         if (!reset) _uiState.update { it.copy(isLoadingMore = true) }
         val page = if (reset) 1 else nextPage
         val tmdbSort = when (state.sort) {
@@ -580,12 +601,15 @@ class BrowseViewModel(
                                 )
                             }
                         }.getOrElse { err ->
-                            // When no regional filter is set, Cinemeta can rescue a transient TMDB outage
-                            if (langQuery == null && !isAdvancedFilterActive(state)) {
-                                val fallback = runCatching {
-                                    CinemetaApi.fetchTrendingMovies(skip = (page - 1) * PAGE_SIZE)
-                                }.getOrNull()
-                                if (!fallback.isNullOrEmpty()) fallback else throw err
+                            // TMDB failing (rejected key, blocked network, outage)
+                            // must not blank the tab: Cinemeta rescues with its
+                            // keyless catalogue and the grid refines client-side.
+                            val fallback = runCatching {
+                                CinemetaApi.fetchTrendingMovies(skip = (page - 1) * PAGE_SIZE)
+                            }.getOrNull()
+                            if (!fallback.isNullOrEmpty()) {
+                                fallbackEngaged = true
+                                fallback
                             } else {
                                 throw err
                             }
@@ -634,23 +658,42 @@ class BrowseViewModel(
                     val apiKey = tmdbKeys?.getKey()
                         ?: throw IllegalStateException("No TMDB key")
                     val langQuery = buildTmdbLanguageQuery(state)
-                    if (isAdvancedFilterActive(state) || langQuery != null) {
-                        TmdbApi.discoverTvAdvanced(
-                            apiKey = apiKey,
-                            languageQuery = langQuery,
-                            genresQuery = buildTvGenresQuery(state),
-                            yearFilter = state.yearFilter,
-                            minRating = state.ratingFilter.minScore,
-                            sort = tmdbSort,
-                            page = page
-                        )
-                    } else {
-                        TmdbApi.discoverTv(
-                            apiKey = apiKey,
-                            genreId = TmdbApi.tvGenreIdFor(state.selectedGenre),
-                            sort = tmdbSort,
-                            page = page
-                        )
+                    val tmdbShows = runCatching {
+                        if (isAdvancedFilterActive(state) || langQuery != null) {
+                            TmdbApi.discoverTvAdvanced(
+                                apiKey = apiKey,
+                                languageQuery = langQuery,
+                                genresQuery = buildTvGenresQuery(state),
+                                yearFilter = state.yearFilter,
+                                minRating = state.ratingFilter.minScore,
+                                sort = tmdbSort,
+                                page = page
+                            )
+                        } else {
+                            TmdbApi.discoverTv(
+                                apiKey = apiKey,
+                                genreId = TmdbApi.tvGenreIdFor(state.selectedGenre),
+                                sort = tmdbSort,
+                                page = page
+                            )
+                        }
+                    }
+                    tmdbShows.getOrElse { err ->
+                        // TMDB failing must not blank the tab: TVMaze + classic
+                        // TV from the Archive rescue it, refined client-side.
+                        val tvmazeResult = runCatching { TvMazeApi.fetchShowsPage(page) }
+                        val archiveResult = runCatching {
+                            ArchiveApi.fetchCollectionPage(
+                                ArchiveApi.CLASSIC_TV,
+                                page = page,
+                                perPage = PAGE_SIZE
+                            )
+                        }
+                        if (tvmazeResult.isFailure && archiveResult.isFailure) throw err
+                        fallbackEngaged = true
+                        (tvmazeResult.getOrDefault(emptyList()) +
+                            archiveResult.getOrDefault(emptyList()))
+                            .distinctBy { it.stableKey }
                     }
                 }
             }
@@ -678,7 +721,8 @@ class BrowseViewModel(
                             (it.titles + pageTitles).distinctBy { t -> t.stableKey }
                         },
                         hasMore = pageTitles.size >= expectedPageSize,
-                        errorMessage = null
+                        errorMessage = null,
+                        fallbackMode = fallbackEngaged
                     )
                 }
                 val now = _uiState.value
@@ -692,14 +736,15 @@ class BrowseViewModel(
                 if (!chainAnotherPage) filterChainLoads = 0
             },
             onFailure = {
+                val reason = TmdbApi.describeTmdbFailure(it)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         isLoadingMore = false,
                         errorMessage = if (reset && it.titles.isEmpty()) {
-                            "Couldn't load content."
+                            reason
                         } else {
-                            "Couldn't load more."
+                            "Couldn't load more. $reason"
                         }
                     )
                 }

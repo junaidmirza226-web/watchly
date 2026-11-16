@@ -36,9 +36,10 @@ object RemoteProviderConfig {
     @Volatile
     private var memoryCachedProviders: List<ProviderEntry>? = null
 
-    /** Dynamically updated TMDB API key from cloud config. Default embedded key. */
+    /** Zero-setup master TMDB key (build-secret injected; blank when none). */
     @Volatile
-    var tmdbApiKey: String? = "3b6bdb61d7ea586e9b15d15aad74a0e0"
+    var tmdbApiKey: String? = com.watchly.app.BuildConfig.MASTER_TMDB_KEY
+        .takeIf { it.isNotBlank() }
 
     /**
      * Bundled fallback provider list embedded directly in the app.
@@ -141,10 +142,9 @@ object RemoteProviderConfig {
                 JSONArray(trimmed)
             } else {
                 val obj = org.json.JSONObject(trimmed)
-                val key = if (obj.has("tmdbKey")) obj.optString("tmdbKey") else obj.optString("tmdb_api_key")
-                if (!key.isNullOrBlank()) {
-                    tmdbApiKey = key
-                }
+                // The remote config only carries the PROVIDER LIST. Master
+                // keys never ride along: a stale key published in providers.json
+                // used to silently clobber the working in-app key at runtime.
                 obj.optJSONArray("providers") ?: JSONArray()
             }
             val list = mutableListOf<ProviderEntry>()

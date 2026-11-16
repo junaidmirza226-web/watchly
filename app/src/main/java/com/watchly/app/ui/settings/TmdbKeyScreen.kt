@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.watchly.app.data.settings.TmdbKeyRepository
 import com.watchly.app.ui.theme.WatchlyGold
 import com.watchly.app.ui.theme.watchlyGoldButtonColors
 import com.watchly.app.ui.theme.WatchlyGoldLight
@@ -102,6 +103,9 @@ fun TmdbKeyScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(20.dp))
+
+            // Keys render masked; the full value only behind an explicit tap.
+            SavedKeyMaskRow(key = TmdbKeyRepository(context.applicationContext).getKey())
 
             OutlinedTextField(
                 value = state.input,

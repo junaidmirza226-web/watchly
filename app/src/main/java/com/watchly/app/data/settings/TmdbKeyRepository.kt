@@ -47,6 +47,18 @@ class TmdbKeyRepository(context: Context) {
     companion object {
         const val PREFS_NAME = "watchly_settings"
         const val KEY_TMDB_API_KEY = "tmdb_api_key"
-        const val DEFAULT_TMDB_API_KEY = "3b6bdb61d7ea586e9b15d15aad74a0e0"
+
+        /**
+         * Built-in master keys, injected at build time (comma-separated
+         * rotation pool: TMDB may reject a stale one, [TmdbApi] falls
+         * through to the next). Blank when the build carries no secret.
+         */
+        val MASTER_TMDB_KEYS: List<String> = com.watchly.app.BuildConfig.MASTER_TMDB_KEY
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+
+        /** Primary built-in master key ("" when none). */
+        val DEFAULT_TMDB_API_KEY: String = MASTER_TMDB_KEYS.firstOrNull() ?: ""
     }
 }

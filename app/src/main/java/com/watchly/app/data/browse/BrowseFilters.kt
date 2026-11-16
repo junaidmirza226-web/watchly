@@ -19,9 +19,9 @@ enum class BrowseSort(val displayLabel: String) {
 
 /** Multi-genre combination logic when 2+ genres are selected. */
 enum class GenreMatchMode(val label: String) {
-    /** Title matches ANY selected genre (OR / pipe `|`). */
+    /** Title matches ANY selected genre (TMDB OR / comma `,`). */
     ANY("Any selected"),
-    /** Title must match ALL selected genres (AND / comma `,`). */
+    /** Title must match ALL selected genres (TMDB AND / pipe `|`). */
     ALL("Match all")
 }
 

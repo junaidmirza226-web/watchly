@@ -30,6 +30,25 @@ if (watchlySigningPropsFile.exists()) {
 }
 val hasWatchlySigning = watchlySigningPropsFile.exists()
 
+// ---------------------------------------------------------------------------
+// Watchly master API keys (cycle 15: keys leave the public tree).
+//
+// The zero-setup master keys (TMDB, OMDb, Trakt, OpenSubtitles, Fanart) are
+// injected at BUILD time from environment variables (CI secrets) or a
+// git-ignored secrets.properties next to this file. They are never committed
+// again: a key published in providers.json / source is a key everyone can
+// scrape. Blank simply means "no built-in key" — features degrade to their
+// "add your own key" states instead of breaking.
+// ---------------------------------------------------------------------------
+val watchlySecretsProps = Properties()
+rootProject.file("secrets.properties").takeIf { it.exists() }?.inputStream()?.use {
+    watchlySecretsProps.load(it)
+}
+fun watchlySecret(name: String): String =
+    System.getenv(name)?.takeIf { it.isNotBlank() }
+        ?: watchlySecretsProps.getProperty(name)?.takeIf { it.isNotBlank() }
+        ?: ""
+
 android {
     namespace = "com.watchly.app"
     // Platform android-36 is installed in the local SDK; compile/target stay on
@@ -48,6 +67,12 @@ android {
         // v1.4.0 (cycle 12): profiles (§8) — 140.
         versionCode = 151
         versionName = "1.5.1"
+        // Master keys — injected at build time, never committed (see above).
+        buildConfigField("String", "MASTER_TMDB_KEY", "\"${watchlySecret("MASTER_TMDB_KEY")}\"")
+        buildConfigField("String", "MASTER_OMDB_KEY", "\"${watchlySecret("MASTER_OMDB_KEY")}\"")
+        buildConfigField("String", "MASTER_TRAKT_CLIENT_ID", "\"${watchlySecret("MASTER_TRAKT_CLIENT_ID")}\"")
+        buildConfigField("String", "MASTER_OPENSUBTITLES_KEY", "\"${watchlySecret("MASTER_OPENSUBTITLES_KEY")}\"")
+        buildConfigField("String", "MASTER_FANART_KEY", "\"${watchlySecret("MASTER_FANART_KEY")}\"")
         // Instrumented tests (app/src/androidTest) run under the
         // standard AndroidX runner on the CI emulator.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
