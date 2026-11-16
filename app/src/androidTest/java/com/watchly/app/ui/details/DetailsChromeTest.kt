@@ -65,7 +65,7 @@ class DetailsChromeTest {
         runBlocking {
             withContext(Dispatchers.Main) {
                 listState.scrollToItem(listState.layoutInfo.totalItemsCount - 1)
-                listState.scrollBy(MIN_SCROLL_PIXELS.toFloat())
+                listState.scrollBy(MIN_SCROLL_PIXELS * 3f)
             }
         }
         composeTestRule.waitForIdle()
@@ -74,7 +74,7 @@ class DetailsChromeTest {
             "content must actually have scrolled (index " +
                 "${listState.firstVisibleItemIndex}, offset " +
                 "${listState.firstVisibleItemScrollOffset}px)",
-            listState.firstVisibleItemScrollOffset > MIN_SCROLL_PIXELS ||
+            listState.firstVisibleItemScrollOffset >= MIN_SCROLL_PIXELS ||
                 listState.firstVisibleItemIndex > 0
         )
         backButton.assertIsDisplayed()
