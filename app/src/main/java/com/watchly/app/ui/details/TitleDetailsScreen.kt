@@ -396,7 +396,7 @@ fun TitleDetailsScreen(
             item { SectionHeading("Where to watch") }
             item {
                 Text(
-                    text = "Add a TMDB key in My Library to see where to watch.",
+                    text = "Where to watch isn't available right now.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp)

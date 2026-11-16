@@ -239,7 +239,7 @@ fun BrowseScreen(
             // Honest provenance: TMDB failed, keyless sources are filling the
             // grid and the filters are applied on-device.
             Text(
-                text = "Fallback catalogue — TMDB unreachable or key rejected. " +
+                text = "Fallback catalogue — TMDB is unreachable right now. " +
                     "Filters applied on this device.",
                 style = MaterialTheme.typography.labelSmall,
                 color = WatchlyGoldLight.copy(alpha = 0.85f),

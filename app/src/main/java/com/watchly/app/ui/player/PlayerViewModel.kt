@@ -1046,9 +1046,8 @@ class PlayerViewModel(
             _uiState.update {
                 it.copy(
                     subtitleResults = emptyList(),
-                    subtitleMessage = "Subtitles come from OpenSubtitles. Add " +
-                        "your free OpenSubtitles key in My Library → API Keys, " +
-                        "then reopen this menu."
+                    subtitleMessage = "Subtitles are unavailable right now. " +
+                        "Try again in a moment."
                 )
             }
             return

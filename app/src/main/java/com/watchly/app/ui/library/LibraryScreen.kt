@@ -390,8 +390,7 @@ internal fun ProfilesCard(
         Spacer(Modifier.height(8.dp))
         Text(
             text = "Each profile keeps its own watchlist, lists, " +
-                "progress and ratings. Downloads and API keys are " +
-                "shared on this phone.",
+                "progress and ratings. Downloads are shared on this phone.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -564,7 +563,7 @@ internal fun ProfilesCard(
                 Text(
                     text = "Their watchlist, lists, progress and " +
                         "ratings on this phone go away. Downloads " +
-                        "and API keys stay — they're shared.",
+                        "stay — they're shared.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )

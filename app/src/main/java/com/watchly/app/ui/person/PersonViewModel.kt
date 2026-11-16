@@ -66,8 +66,8 @@ class PersonViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = "Person pages come from TMDB. " +
-                            "Add your TMDB key in My Library to see them."
+                        errorMessage = "Person pages aren't available right now. " +
+                            "Try again later."
                     )
                 }
                 return@launch

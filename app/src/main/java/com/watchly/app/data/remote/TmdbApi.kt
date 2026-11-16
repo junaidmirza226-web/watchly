@@ -422,14 +422,14 @@ object TmdbApi {
                     "fallback catalogue — if TMDB is blocked on your network, " +
                     "try another network."
             msg.contains("TMDB HTTP 401") || msg.contains("TMDB HTTP 403") ->
-                "TMDB rejected the API key. Add your own free TMDB key to unlock " +
-                    "the full catalogue."
+                "TMDB rejected this app's access for now. The fallback " +
+                    "catalogue stays on — try again later."
             msg.contains("TMDB HTTP 429") ->
                 "TMDB is rate-limiting requests right now. Try again in a moment."
             msg.contains("TMDB HTTP 5") ->
                 "TMDB servers are having trouble. Try again shortly."
             msg.contains("No TMDB key") ->
-                "No TMDB key yet. Add your free TMDB key to unlock the full catalogue."
+                "No TMDB key in this build. The fallback catalogue stays on."
             else -> "Couldn't load content. ${msg.take(120)}".trim()
         }
     }

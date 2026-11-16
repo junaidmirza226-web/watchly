@@ -149,7 +149,7 @@ class PersonViewModelTest {
 
             val state = viewModel.uiState.value
             assertNull(state.person)
-            assertTrue(state.errorMessage?.contains("TMDB key") == true)
+            assertTrue(state.errorMessage?.contains("aren't available") == true)
             coVerify(exactly = 0) { TmdbApi.fetchPerson(any(), any()) }
             coVerify(exactly = 0) {
                 TmdbApi.fetchPersonKnownFor(any(), any(), any())

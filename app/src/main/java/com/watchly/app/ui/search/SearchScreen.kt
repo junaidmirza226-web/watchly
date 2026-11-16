@@ -222,12 +222,12 @@ fun SearchScreen(
         // key the biggest catalogue is not searched at all, and
         // nothing used to say so — sparse results just looked like
         // the app had nothing. One honest line, shown whenever a
-        // query is in play and no key is saved; it disappears for
-        // good once the key is pasted in My Library.
+        // query is in play in a keyless build; it disappears as soon
+        // as the build carries its built-in key.
         if (state.query.isNotBlank() && !state.hasTmdbKey) {
             Text(
-                text = "TMDB isn't searched yet — add your free TMDB key " +
-                    "in My Library to search the full movie catalogue too.",
+                text = "TMDB isn't searched in this build — showing results " +
+                    "from other sources.",
                 style = MaterialTheme.typography.bodySmall,
                 color = WatchlyGoldLight,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
