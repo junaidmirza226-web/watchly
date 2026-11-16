@@ -75,4 +75,25 @@ class AppUpdateCheckerTest {
         assertNull(AppUpdateChecker.pickApkAsset(JSONObject("""{"assets": []}""")))
         assertNull(AppUpdateChecker.pickApkAsset(JSONObject("{}")))
     }
+
+    @Test
+    fun newestVersionPicksTheNumericallyNewestTag() {
+        // Ordering in the list must not matter — newest wins even when
+        // GitHub serves releases in a shuffled order.
+        assertEquals(
+            "1.5.1.74",
+            AppUpdateChecker.newestVersion(listOf("v1.5.1.72", "v1.5.1.74", "v1.5.1.70"))
+        )
+        assertEquals(
+            "1.5.1.74",
+            AppUpdateChecker.newestVersion(listOf("v1.5.1.74", "1.5.1.7", "1.5.1"))
+        )
+        assertEquals("1.6.0", AppUpdateChecker.newestVersion(listOf("v1.5.1.74", "v1.6.0")))
+        // Garbage tags are ignored entirely.
+        assertEquals(
+            "1.5.1.71",
+            AppUpdateChecker.newestVersion(listOf("nightly", "v1.5.1.71", "", "v0.0.1-broken"))
+        )
+        assertNull(AppUpdateChecker.newestVersion(emptyList()))
+    }
 }

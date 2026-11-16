@@ -195,7 +195,7 @@ private fun HomeContent(
                         "Installing — confirm in the system dialog."
                     is com.watchly.app.data.remote.AppUpdateChecker.InstallState.Error -> s.message
                     com.watchly.app.data.remote.AppUpdateChecker.InstallState.Idle ->
-                        "Tap to download & install — no re-sideloading needed."
+                        "You have v${update.currentVersion} — tap to download & install."
                 }
                 val buttonText = when (installState) {
                     is com.watchly.app.data.remote.AppUpdateChecker.InstallState.Downloading ->
@@ -232,9 +232,8 @@ private fun HomeContent(
                         }
                         Button(
                             onClick = {
-                                com.watchly.app.data.remote.AppUpdateChecker.startUpdate(
-                                    localContext,
-                                    update.downloadUrl
+                                com.watchly.app.data.remote.AppUpdateChecker.updateNow(
+                                    localContext
                                 )
                             },
                             enabled = !busy,

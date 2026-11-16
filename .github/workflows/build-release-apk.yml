@@ -83,27 +83,54 @@ jobs:
           MASTER_TRAKT_CLIENT_ID: ${{ secrets.MASTER_TRAKT_CLIENT_ID }}
           MASTER_OPENSUBTITLES_KEY: ${{ secrets.MASTER_OPENSUBTITLES_KEY }}
           MASTER_FANART_KEY: ${{ secrets.MASTER_FANART_KEY }}
-        run: ./gradlew assembleRelease --stacktrace || ./gradlew assembleDebug --stacktrace
+        # No debug fallback: a debug-signed APK can never install over the
+        # release-signed app (signature mismatch), which bricks in-app update.
+        run: ./gradlew assembleRelease --stacktrace
 
       - name: Prepare APK Asset
         run: |
+          set -euo pipefail
           mkdir -p release-output
-          # Select signed APK, explicitly ignoring any unsigned outputs
-          APK_FILE=$(find app/build/outputs/apk -name "*.apk" -not -name "*unsigned*" -not -name "*androidTest*" | head -n 1)
+          # Deterministic selection: the signed release variant only.
+          APK_FILE=$(find app/build/outputs/apk/release -name "*.apk" -not -name "*unsigned*" -not -name "*androidTest*" | head -n 1)
           if [ -z "$APK_FILE" ]; then
-            echo "Warning: No signed APK found, falling back to any APK..."
-            APK_FILE=$(find app/build/outputs/apk -name "*.apk" -not -name "*androidTest*" | head -n 1)
+            echo "::error::No signed release APK found — refusing to publish."
+            exit 1
           fi
           echo "Selected APK: $APK_FILE"
           cp "$APK_FILE" release-output/watchly.apk
-          
-          # Verify signature
+
+          # Signature verification must PASS (a release APK signed with the
+          # wrong key can never update the installed app in place).
           APKSIGNER=$(find $ANDROID_HOME/build-tools/ -name apksigner 2>/dev/null | sort -V | tail -n 1)
-          if [ -n "$APKSIGNER" ]; then
-            echo "Verifying APK signature using $APKSIGNER..."
-            $APKSIGNER verify --verbose release-output/watchly.apk || true
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner not found in build-tools."
+            exit 1
           fi
+          echo "Verifying APK signature using $APKSIGNER..."
+          $APKSIGNER verify --verbose release-output/watchly.apk
           ls -la release-output/
+
+      - name: Verify APK version matches this build
+        run: |
+          set -euo pipefail
+          # The in-app updater compares PackageManager-reported versions, so
+          # the APK's *embedded* versionName/versionCode must equal the
+          # per-build values — otherwise every device update loops forever.
+          AAPT=$(find $ANDROID_HOME/build-tools/ -name aapt 2>/dev/null | sort -V | tail -n 1)
+          if [ -z "$AAPT" ]; then
+            echo "::error::aapt not found in build-tools."
+            exit 1
+          fi
+          BADGING=$($AAPT dump badging release-output/watchly.apk | head -n 2)
+          echo "$BADGING"
+          VER_NAME=$(echo "$BADGING" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
+          VER_CODE=$(echo "$BADGING" | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p")
+          echo "::notice::Watchly APK embeds versionName=$VER_NAME versionCode=$VER_CODE (expected $BUILD_VERSION_NAME / $BUILD_VERSION_CODE)"
+          if [ "$VER_NAME" != "$BUILD_VERSION_NAME" ] || [ "$VER_CODE" != "$BUILD_VERSION_CODE" ]; then
+            echo "::error::APK version ($VER_NAME / $VER_CODE) does not match this build ($BUILD_VERSION_NAME / $BUILD_VERSION_CODE). The update banner would loop forever on devices."
+            exit 1
+          fi
 
       - name: Verify master keys are baked in (zero-setup)
         env:

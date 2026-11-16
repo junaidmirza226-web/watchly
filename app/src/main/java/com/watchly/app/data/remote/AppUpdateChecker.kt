@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -32,13 +33,17 @@ data class AppUpdateInfo(
  */
 object AppUpdateChecker {
 
+    // The LIST endpoint is used (not /releases/latest) because GitHub's
+    // "latest" pointer sorts by created_at, which for API-created tags
+    // reflects the commit date — an older build can win that sort. We walk
+    // all published releases and pick the numerically newest version instead.
     private const val GITHUB_RELEASES_API_URL =
-        "https://api.github.com/repos/junaidmirza226-web/watchly/releases/latest"
+        "https://api.github.com/repos/junaidmirza226-web/watchly/releases?per_page=20"
 
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
             .build()
     }
 
@@ -57,41 +62,85 @@ object AppUpdateChecker {
         try {
             val request = Request.Builder()
                 .url(apiUrl)
-                .header("Accept", "application/vnd.github.v3+json")
+                .header("Accept", "application/vnd.github+json")
+                .header("Cache-Control", "no-cache")
                 .header("User-Agent", "WatchlyApp/$installedVersion (Android)")
                 .build()
 
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@withContext null
                 val body = response.body?.string() ?: return@withContext null
-                val json = JSONObject(body)
 
-                val tagName = json.optString("tag_name", "").removePrefix("v").trim()
-                if (tagName.isBlank()) return@withContext null
-
-                if (isNewerVersion(current = installedVersion, remote = tagName)) {
-                    val name = json.optString("name", "Version $tagName")
-                    val bodyNotes = json.optString("body", "")
-                    val htmlUrl = json.optString("html_url", "")
-
-                    // APK asset download URL first, release page as fallback.
-                    val downloadUrl = pickApkAsset(json) ?: htmlUrl
-
-                    val info = AppUpdateInfo(
-                        currentVersion = installedVersion,
-                        latestVersion = tagName,
-                        releaseNotes = bodyNotes.ifBlank { null },
-                        downloadUrl = downloadUrl,
-                        releaseName = name.ifBlank { null }
-                    )
-                    _updateState.value = info
-                    return@withContext info
+                val releases = parseReleases(body)
+                val bestTag = newestVersion(releases.map { it.tag }) ?: return@withContext null
+                if (!isNewerVersion(current = installedVersion, remote = bestTag)) {
+                    return@withContext null
                 }
+                val release = releases.first { it.tag == bestTag }
+
+                // APK asset download URL first, release page as fallback.
+                val downloadUrl = pickApkAsset(release.json) ?: release.htmlUrl
+
+                val info = AppUpdateInfo(
+                    currentVersion = installedVersion,
+                    latestVersion = bestTag,
+                    releaseNotes = release.notes.ifBlank { null },
+                    downloadUrl = downloadUrl,
+                    releaseName = release.name.ifBlank { null }
+                )
+                _updateState.value = info
+                return@withContext info
             }
         } catch (_: Exception) {
             // Never crash on network/JSON errors
         }
         null
+    }
+
+    /**
+     * One-tap update: always re-checks GitHub first so a long-lived app
+     * process can never hand the installer a stale, outdated download URL.
+     */
+    fun updateNow(context: Context) {
+        val appContext = context.applicationContext
+        installScope.launch {
+            val info = checkForUpdates(appContext)
+            if (info != null) {
+                startUpdate(appContext, info.downloadUrl)
+            }
+        }
+    }
+
+    private data class ReleaseEntry(
+        val tag: String,
+        val name: String,
+        val notes: String,
+        val htmlUrl: String,
+        val json: JSONObject
+    )
+
+    /** Accepts either a JSON array of releases or a single release object. */
+    private fun parseReleases(body: String): List<ReleaseEntry> {
+        val items: List<JSONObject> = when {
+            body.trimStart().startsWith("[") -> {
+                val arr = JSONArray(body)
+                (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }
+            }
+            else -> listOfNotNull(JSONObject(body))
+        }
+        return items
+            .filter { !it.optBoolean("draft", false) && !it.optBoolean("prerelease", false) }
+            .mapNotNull { item ->
+                val tag = item.optString("tag_name", "").removePrefix("v").trim()
+                if (tag.isBlank()) return@mapNotNull null
+                ReleaseEntry(
+                    tag = tag,
+                    name = item.optString("name", "Version $tag"),
+                    notes = item.optString("body", ""),
+                    htmlUrl = item.optString("html_url", ""),
+                    json = item
+                )
+            }
     }
 
     /**
@@ -106,6 +155,17 @@ object AppUpdateChecker {
         @Suppress("DEPRECATION")
         context.packageManager.getPackageInfo(context.packageName, 0).versionName
     }.getOrNull()?.takeIf { it.isNotBlank() }
+
+    /** Installed versionCode, or -1 when unknown. */
+    fun currentVersionCode(context: Context): Long = runCatching {
+        val info = context.packageManager.getPackageInfo(context.packageName, 0)
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            info.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            info.versionCode.toLong()
+        }
+    }.getOrDefault(-1L)
 
     /**
      * Compares semantic versions (e.g. "1.4.2" vs "1.5.0", "1.4.10",
@@ -124,6 +184,21 @@ object AppUpdateChecker {
             if (r < c) return false
         }
         return false
+    }
+
+    /** Newest numeric version among tag names, or null if none are usable. */
+    fun newestVersion(tags: List<String>): String? {
+        return tags.map { it.removePrefix("v").trim() }
+            .filter { tag ->
+                tag.isNotEmpty() && tag.split(".").all { part -> part.toIntOrNull() != null }
+            }
+            .fold<String, String?>(null) { best, candidate ->
+                when {
+                    best == null -> candidate
+                    isNewerVersion(current = best, remote = candidate) -> candidate
+                    else -> best
+                }
+            }
     }
 
     /** Picks the APK asset download URL from a release JSON (watchly.apk first). */
@@ -176,6 +251,8 @@ object AppUpdateChecker {
             try {
                 val dir = File(appContext.cacheDir, "updates").apply { mkdirs() }
                 val target = File(dir, "watchly-update.apk")
+                // Never trust a leftover file from a previous attempt.
+                if (target.exists()) target.delete()
                 val request = Request.Builder()
                     .url(downloadUrl)
                     .header("User-Agent", "WatchlyApp/${currentVersion(appContext)} (Android)")
@@ -203,6 +280,33 @@ object AppUpdateChecker {
                         }
                     }
                 }
+
+                // Verify the downloaded file really is a NEWER build before
+                // opening the installer — a stale or wrong file must never
+                // silently "reinstall the same version" again.
+                val archive = runCatching {
+                    @Suppress("DEPRECATION")
+                    appContext.packageManager.getPackageArchiveInfo(target.absolutePath, 0)
+                }.getOrNull()
+                val archiveCode = archive?.let {
+                    if (android.os.Build.VERSION.SDK_INT >= 28) {
+                        it.longVersionCode
+                    } else {
+                        @Suppress("DEPRECATION")
+                        it.versionCode.toLong()
+                    }
+                } ?: -1L
+                val archiveName = archive?.versionName ?: "?"
+                val installedCode = currentVersionCode(appContext)
+                if (archive == null || target.length() < 100_000L || archiveCode <= installedCode) {
+                    target.delete()
+                    _installState.value = InstallState.Error(
+                        "Downloaded file is build $archiveName (code $archiveCode) but you already " +
+                            "have ${currentVersion(appContext)} (code $installedCode) — tap Update to try again."
+                    )
+                    return@launch
+                }
+
                 installApk(appContext, target)
             } catch (t: Throwable) {
                 _installState.value = InstallState.Error(
@@ -242,23 +346,21 @@ object AppUpdateChecker {
             )
         }
         _installState.value = InstallState.Installing
-        runCatching { context.startActivity(intent) }.onFailure {
-            _installState.value = InstallState.Error("Couldn't open the installer.")
-        }
+        context.startActivity(intent)
     }
 
-    /** Resets the install status (after a failed attempt is abandoned). */
-    fun clearInstallState() {
-        _installState.value = InstallState.Idle
-    }
-
-    fun triggerInstall(context: android.content.Context, downloadUrl: String) {
+    /** Browser fallback when no APK asset exists. */
+    private fun triggerInstall(context: Context, url: String) {
         runCatching {
-            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                data = android.net.Uri.parse(downloadUrl)
-                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
+            val intent = android.content.Intent(
+                android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse(url)
+            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
         }
+    }
+
+    fun resetInstallState() {
+        _installState.value = InstallState.Idle
     }
 }
