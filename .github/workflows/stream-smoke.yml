@@ -1,0 +1,38 @@
+name: Stream Smoke
+
+# =============================================================================
+# Watchly - Real-network stream source smoke probe.
+# Run on demand (workflow_dispatch) to get evidence of which streaming
+# sources actually respond and what they expose (direct media, players,
+# dubbed-audio variants). Report-only — never blocks CI.
+# =============================================================================
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Probe streaming sources
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Probe provider endpoints
+        run: |
+          set -o pipefail
+          python3 scripts/stream_smoke.py | tee smoke-report.md
+          {
+            echo "## Stream source smoke report"
+            echo ""
+            cat smoke-report.md
+          } >> "$GITHUB_STEP_SUMMARY"
