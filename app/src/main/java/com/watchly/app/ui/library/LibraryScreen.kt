@@ -3,7 +3,6 @@
  *
  * Sections, top to bottom:
  *  - Profiles card (cycle 12, §8): who's watching, and the switcher.
- *  - TMDB card: connected state, or the entry point to add the key.
  *  - Continue Watching: in-progress titles with a gold progress bar.
  *  - Watchlist: saved titles as poster cards.
  *  - Downloads: every offline download with status, progress,
@@ -78,8 +77,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+
 import com.watchly.app.data.downloads.DownloadRecord
 import com.watchly.app.data.downloads.DownloadRules
 import com.watchly.app.data.downloads.DownloadStatus
@@ -89,8 +87,7 @@ import com.watchly.app.data.library.WatchlyProfile
 import com.watchly.app.data.model.PlayableFile
 import com.watchly.app.data.model.Title
 import com.watchly.app.data.playback.PlaybackProgress
-import com.watchly.app.data.remote.TmdbApi
-import com.watchly.app.data.settings.TmdbKeyRepository
+
 import com.watchly.app.ui.components.PosterCard
 import com.watchly.app.ui.lists.ListCard
 import com.watchly.app.ui.theme.WatchlyGold
@@ -103,8 +100,6 @@ fun LibraryScreen(
     modifier: Modifier = Modifier,
     onTitleClick: (Title) -> Unit = {},
     onProfileSwitched: () -> Unit = {},
-    onTmdbClick: () -> Unit = {},
-    onApiKeysClick: () -> Unit = {},
     onListsClick: () -> Unit = {},
     onListClick: (UserList) -> Unit = {},
     onPlayDownload: (Title, PlayableFile) -> Unit = { _, _ -> }
@@ -289,14 +284,6 @@ fun LibraryScreen(
                         viewModel::setDownloadPauseOnLowBattery,
                     onStorageCapChange = viewModel::setDownloadStorageCap
                 )
-            }
-
-            item(key = "tmdb_card") {
-                TmdbCard(hasKey = state.hasTmdbKey, onClick = onTmdbClick)
-            }
-
-            item(key = "api_keys") {
-                ApiKeysCard(onClick = onApiKeysClick)
             }
 
             item(key = "your_data") {
@@ -745,138 +732,6 @@ internal fun ProfileNameDialog(
             }
         }
     )
-}
-
-/** Live TMDB reachability of the active key — "has a key" is not "connected". */
-private sealed interface TmdbHealth {
-    data object Checking : TmdbHealth
-    data object Connected : TmdbHealth
-    data object Rejected : TmdbHealth
-    data object Unreachable : TmdbHealth
-}
-
-@Composable
-private fun TmdbCard(
-    hasKey: Boolean,
-    onClick: () -> Unit,
-    runHealthCheck: Boolean = true
-) {
-    val context = LocalContext.current
-    var health by remember { mutableStateOf<TmdbHealth>(TmdbHealth.Checking) }
-    if (hasKey && runHealthCheck) {
-        LaunchedEffect(Unit) {
-            health = withContext(Dispatchers.IO) {
-                val key = TmdbKeyRepository(context.applicationContext).getKey()
-                if (key == null) {
-                    TmdbHealth.Rejected
-                } else {
-                    // validateKey returns false for a rejected key (401) and
-                    // throws when the network/TMDB is unreachable.
-                    runCatching { TmdbApi.validateKey(key) }.fold(
-                        onSuccess = { valid ->
-                            if (valid) TmdbHealth.Connected else TmdbHealth.Rejected
-                        },
-                        onFailure = { TmdbHealth.Unreachable }
-                    )
-                }
-            }
-        }
-    }
-    // Pre-composed states (screenshot tests, runHealthCheck = false) keep the
-    // classic static text so goldens never flip on a network probe.
-    val effective: TmdbHealth =
-        if (hasKey && !runHealthCheck) TmdbHealth.Connected else health
-    val title = when {
-        !hasKey -> "TMDB Catalog"
-        effective == TmdbHealth.Checking -> "TMDB Catalog — Checking…"
-        effective == TmdbHealth.Connected -> "TMDB Catalog — Connected ✓"
-        effective == TmdbHealth.Rejected -> "TMDB Catalog — key rejected"
-        else -> "TMDB Catalog — no connection"
-    }
-    val subtitle = when {
-        !hasKey -> "Configure TMDB key for custom feeds."
-        effective == TmdbHealth.Checking -> "Testing the connection to TMDB…"
-        effective == TmdbHealth.Connected -> "Industries active."
-        effective == TmdbHealth.Rejected ->
-            "TMDB refused the current key. Add your own free key to unlock " +
-                "the full catalogue."
-        else ->
-            "Couldn't reach TMDB from this network. The fallback catalogue " +
-                "stays on."
-    }
-    Column(
-        modifier = Modifier
-            .padding(horizontal = 16.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(16.dp)
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            color = WatchlyGold
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(10.dp))
-        Button(
-            onClick = onClick,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = WatchlyGold,
-                contentColor = Color(0xFF1A1405)
-            )
-        ) {
-            Text(
-                if (hasKey && effective != TmdbHealth.Rejected) {
-                    "Configure TMDB Key"
-                } else {
-                    "Add TMDB Key"
-                }
-            )
-        }
-    }
-}
-
-/**
- * The one-go entry to the API Keys hub: configure OMDb, Trakt, OpenSubtitles.
- */
-@Composable
-private fun ApiKeysCard(onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .padding(horizontal = 16.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(16.dp)
-    ) {
-        Text(
-            text = "API Integrations",
-            style = MaterialTheme.typography.titleLarge,
-            color = WatchlyGold
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "OMDb • Trakt • OpenSubtitles",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(10.dp))
-        Button(
-            onClick = onClick,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = WatchlyGold,
-                contentColor = Color(0xFF1A1405)
-            )
-        ) {
-            Text("Manage API Keys")
-        }
-    }
 }
 
 /**

@@ -31,23 +31,39 @@ if (watchlySigningPropsFile.exists()) {
 val hasWatchlySigning = watchlySigningPropsFile.exists()
 
 // ---------------------------------------------------------------------------
-// Watchly master API keys (cycle 15: keys leave the public tree).
+// Watchly master API keys — baked into RELEASE builds so the app is
+// zero-setup: no key screens, no pasting, nothing for a user to configure.
 //
-// The zero-setup master keys (TMDB, OMDb, Trakt, OpenSubtitles, Fanart) are
-// injected at BUILD time from environment variables (CI secrets) or a
-// git-ignored secrets.properties next to this file. They are never committed
-// again: a key published in providers.json / source is a key everyone can
-// scrape. Blank simply means "no built-in key" — features degrade to their
-// "add your own key" states instead of breaking.
+// Resolution order per key: environment (CI secrets) → git-ignored
+// secrets.properties → the built-in fallback constants below. Debug/test
+// builds stay BLANK on purpose (screenshot goldens and feature gating need
+// the keyless state to be deterministic); only the release APK carries keys.
+//
+// To rotate: replace the fallback constants here (or set the same-named
+// environment variables / secrets.properties entries, which win) — no other
+// change needed.
 // ---------------------------------------------------------------------------
 val watchlySecretsProps = Properties()
 rootProject.file("secrets.properties").takeIf { it.exists() }?.inputStream()?.use {
     watchlySecretsProps.load(it)
 }
-fun watchlySecret(name: String): String =
+
+// Built-in fallback keys (release builds only). The TMDB value is a
+// comma-separated rotation pool: if TMDB rejects the first, TmdbApi
+// falls through to the next.
+val watchlyMasterDefaults = mapOf(
+    "MASTER_TMDB_KEY" to
+        "4f298a53e5522830c957e3bc1d007647,3b6bdb61d7ea586e9b15d15aad74a0e0",
+    "MASTER_OMDB_KEY" to "3fe6e3fc",
+    "MASTER_TRAKT_CLIENT_ID" to "2M3JfayN76tNAq_ppJw6ZXROTDmhsq9THc0pnuqfB6o",
+    "MASTER_OPENSUBTITLES_KEY" to "nU9U21UXcHfxmOSCNUHZnFNb80zq0aa9",
+    "MASTER_FANART_KEY" to "42ab51ecdff1d6a6100d90fb4032cc9d"
+)
+
+fun watchlySecret(name: String, fallback: String = ""): String =
     System.getenv(name)?.takeIf { it.isNotBlank() }
         ?: watchlySecretsProps.getProperty(name)?.takeIf { it.isNotBlank() }
-        ?: ""
+        ?: fallback
 
 android {
     namespace = "com.watchly.app"
@@ -71,12 +87,6 @@ android {
         // build installs over the last and the update banner compares true.
         // Local builds fall back to the fixed release values.
         versionName = System.getenv("BUILD_VERSION_NAME") ?: "1.5.1"
-        // Master keys — injected at build time, never committed (see above).
-        buildConfigField("String", "MASTER_TMDB_KEY", "\"${watchlySecret("MASTER_TMDB_KEY")}\"")
-        buildConfigField("String", "MASTER_OMDB_KEY", "\"${watchlySecret("MASTER_OMDB_KEY")}\"")
-        buildConfigField("String", "MASTER_TRAKT_CLIENT_ID", "\"${watchlySecret("MASTER_TRAKT_CLIENT_ID")}\"")
-        buildConfigField("String", "MASTER_OPENSUBTITLES_KEY", "\"${watchlySecret("MASTER_OPENSUBTITLES_KEY")}\"")
-        buildConfigField("String", "MASTER_FANART_KEY", "\"${watchlySecret("MASTER_FANART_KEY")}\"")
         // Instrumented tests (app/src/androidTest) run under the
         // standard AndroidX runner on the CI emulator.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -123,6 +133,14 @@ android {
             // (local builds) so every delivered build installs over
             // the previous one; platform debug key otherwise (CI).
             signingConfig = signingConfigs.findByName("watchly") ?: signingConfigs.getByName("debug")
+            // Master keys stay BLANK in debug/test builds: screenshot
+            // goldens and key-gating assertions must be deterministic
+            // (keyless) — never a live key here.
+            buildConfigField("String", "MASTER_TMDB_KEY", "\"\"")
+            buildConfigField("String", "MASTER_OMDB_KEY", "\"\"")
+            buildConfigField("String", "MASTER_TRAKT_CLIENT_ID", "\"\"")
+            buildConfigField("String", "MASTER_OPENSUBTITLES_KEY", "\"\"")
+            buildConfigField("String", "MASTER_FANART_KEY", "\"\"")
         }
         release {
             isMinifyEnabled = true
@@ -132,6 +150,11 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.findByName("watchly") ?: signingConfigs.getByName("debug")
+            // Zero-setup: release APKs carry the master keys (env /
+            // secrets.properties override the baked defaults).
+            watchlyMasterDefaults.forEach { (name, default) ->
+                buildConfigField("String", name, "\"${watchlySecret(name, default)}\"")
+            }
         }
     }
     lint {

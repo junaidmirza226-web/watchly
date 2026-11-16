@@ -94,7 +94,6 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     onTitleClick: (Title) -> Unit = {},
     onSearchClick: () -> Unit = {},
-    onTmdbClick: () -> Unit = {},
     onOpenBrowseKind: (BrowseKind) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -145,7 +144,6 @@ fun HomeScreen(
                 state = state,
                 onTitleClick = onTitleClick,
                 onRetry = viewModel::load,
-                onTmdbClick = onTmdbClick,
                 onOpenBrowsePreset = { preset ->
                     BrowsePresetStore.offer(preset)
                     onOpenBrowseKind(preset.kind)
@@ -161,7 +159,6 @@ private fun HomeContent(
     state: HomeUiState,
     onTitleClick: (Title) -> Unit,
     onRetry: () -> Unit = {},
-    onTmdbClick: () -> Unit = {},
     onOpenBrowsePreset: (BrowsePreset) -> Unit = {},
     onDismissContinueWatching: (String) -> Unit = {}
 ) {
@@ -494,15 +491,6 @@ private fun HomeContent(
                     emptyMessage = "",
                     onTitleClick = onHeroTitleClick
                 )
-            }
-        }
-
-        if (!state.hasTmdbKey) {
-            item { Spacer(Modifier.height(24.dp)) }
-            item(key = "tmdb-unlock") {
-                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    TmdbUnlockCard(onClick = onTmdbClick)
-                }
             }
         }
     }
@@ -1052,42 +1040,6 @@ private fun HomeError(
             ) {
                 Text("Retry")
             }
-        }
-    }
-}
-
-@Composable
-internal fun TmdbUnlockCard(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(16.dp)
-    ) {
-        Text(
-            text = "Unlock every industry",
-            style = MaterialTheme.typography.titleLarge,
-            color = WatchlyGold
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = "Add a TMDB key to unlock industries.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = onClick,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = WatchlyGold,
-                contentColor = Color(0xFF1A1405)
-            )
-        ) {
-            Text("Add TMDB Key")
         }
     }
 }

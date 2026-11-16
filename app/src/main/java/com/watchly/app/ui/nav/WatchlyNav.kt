@@ -63,7 +63,6 @@ import com.watchly.app.ui.player.PlaybackRequest
 import com.watchly.app.ui.player.PlaybackSessionStore
 import com.watchly.app.ui.player.PlayerScreen
 import com.watchly.app.ui.search.SearchScreen
-import com.watchly.app.ui.settings.TmdbKeyScreen
 import com.watchly.app.ui.theme.WatchlyBlack
 import com.watchly.app.ui.theme.WatchlyGold
 import com.watchly.app.ui.theme.WatchlyGoldContainer
@@ -88,9 +87,6 @@ object WatchlyRoutes {
     const val SEARCH = "search"
     const val DETAILS = "details"
     const val PLAYER = "player"
-    const val TMDB_KEY = "tmdb_key"
-    const val API_KEYS = "api_keys"
-    const val PROVIDER_KEY = "provider_key"
     const val LISTS = "lists"
     const val LIST_DETAIL = "list_detail"
     const val BROWSER = "browser"
@@ -227,7 +223,6 @@ internal fun WatchlyNavHost(
             HomeScreen(
                 onTitleClick = openDetails,
                 onSearchClick = { navController.navigate(WatchlyRoutes.SEARCH) },
-                onTmdbClick = { navController.navigate(WatchlyRoutes.TMDB_KEY) },
                 onOpenBrowseKind = { kind ->
                     val route = when (kind) {
                         BrowseKind.MOVIES -> WatchlyDestination.MOVIES.route
@@ -284,8 +279,6 @@ internal fun WatchlyNavHost(
                         launchSingleTop = true
                     }
                 },
-                onTmdbClick = { navController.navigate(WatchlyRoutes.TMDB_KEY) },
-                onApiKeysClick = { navController.navigate(WatchlyRoutes.API_KEYS) },
                 onListsClick = { navController.navigate(WatchlyRoutes.LISTS) },
                 onListClick = { list ->
                     SelectedListStore.select(list.id)
@@ -304,41 +297,6 @@ internal fun WatchlyNavHost(
                     navController.navigate(WatchlyRoutes.PLAYER)
                 }
             )
-        }
-        composable(WatchlyRoutes.TMDB_KEY) {
-            TmdbKeyScreen(onBack = { navController.popBackStack() })
-        }
-        composable(WatchlyRoutes.API_KEYS) {
-            com.watchly.app.ui.settings.ApiKeysScreen(
-                onBack = { navController.popBackStack() },
-                onTmdbClick = { navController.navigate(WatchlyRoutes.TMDB_KEY) },
-                onProviderClick = { provider ->
-                    navController.navigate(
-                        "${WatchlyRoutes.PROVIDER_KEY}/${provider.name}"
-                    )
-                }
-            )
-        }
-        composable(
-            route = "${WatchlyRoutes.PROVIDER_KEY}/{provider}",
-            arguments = listOf(
-                androidx.navigation.navArgument("provider") {
-                    type = androidx.navigation.NavType.StringType
-                }
-            )
-        ) { entry ->
-            val providerName = entry.arguments?.getString("provider")
-            val provider = com.watchly.app.data.settings.ApiProvider.entries
-                .firstOrNull { it.name == providerName }
-            if (provider != null) {
-                com.watchly.app.ui.settings.ProviderKeyScreen(
-                    provider = provider,
-                    onBack = { navController.popBackStack() }
-                )
-            } else {
-                LaunchedEffect(Unit) { navController.popBackStack() }
-                PlaceholderScreen(title = "Unknown provider")
-            }
         }
         composable(WatchlyRoutes.LISTS) {
             ListsScreen(

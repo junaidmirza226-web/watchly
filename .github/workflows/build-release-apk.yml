@@ -105,6 +105,26 @@ jobs:
           fi
           ls -la release-output/
 
+      - name: Verify master keys are baked in (zero-setup)
+        env:
+          MASTER_TMDB_KEY: ${{ secrets.MASTER_TMDB_KEY }}
+        run: |
+          set -euo pipefail
+          # Expected key: the CI secret when set, otherwise the built-in
+          # fallback constant from app/build.gradle.kts (single source of truth).
+          KEY="${MASTER_TMDB_KEY%%,*}"
+          if [ -z "$KEY" ]; then
+            KEY=$(grep -o '"4f298a53[a-f0-9,]*"' app/build.gradle.kts | head -n 1 | tr -d '"' | cut -d, -f1)
+          fi
+          mkdir -p /tmp/apkcheck && rm -f /tmp/apkcheck/*.dex
+          unzip -o -q release-output/watchly.apk 'classes*.dex' -d /tmp/apkcheck
+          if grep -raq -- "$KEY" /tmp/apkcheck; then
+            echo "OK: master TMDB key is baked into the APK — zero-setup works."
+          else
+            echo "::error::Master TMDB key NOT found inside the APK — the app would start keyless."
+            exit 1
+          fi
+
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
