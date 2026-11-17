@@ -31,6 +31,9 @@ class AdShieldTest {
         assertFalse(isSniffableDirectMedia("https://cdn.example/seg1.ts"))
         assertFalse(isSniffableDirectMedia("https://cdn.example/preview.mp4"))
         assertFalse(isSniffableDirectMedia("https://pagead2.googlesyndication.com/ad.mp4"))
+        // A data: page whose payload mentions .m3u8 is still a page:
+        assertFalse(isSniffableDirectMedia("data:text/html,%3Cvideo%20src%3D%22x.m3u8%22%3E"))
+        assertFalse(isSniffableDirectMedia("blob:https://cdn.example/uuid-with.m3u8"))
     }
 
     @Test

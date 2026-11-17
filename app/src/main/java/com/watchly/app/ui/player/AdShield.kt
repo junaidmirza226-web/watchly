@@ -41,6 +41,9 @@ internal fun isBlockedAdUrl(url: String): Boolean {
 internal fun isSniffableDirectMedia(url: String): Boolean {
     val lower = url.lowercase()
     if (isBlockedAdUrl(lower)) return false
+    // Only real network URLs can be downloaded or played back; a data:
+    // page whose *payload* mentions .m3u8 must never match.
+    if (!lower.startsWith("http://") && !lower.startsWith("https://")) return false
     return (lower.contains(".m3u8") || lower.contains(".mp4")) &&
         !lower.endsWith(".ts") &&
         !lower.contains("preview") &&
