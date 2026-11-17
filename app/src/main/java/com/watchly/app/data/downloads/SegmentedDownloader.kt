@@ -24,8 +24,10 @@
 package com.watchly.app.data.downloads
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -183,6 +185,12 @@ class SegmentedDownloader(
         shouldStop: () -> Boolean = { false },
         onState: (DownloadSnapshot) -> Unit = {}
     ): DownloadOutcome {
+        // HLS streams (the headless resolver's usual catch): the "file"
+        // is a playlist of segments — download them in order into one
+        // local file, exactly like a MovieBox-class downloader.
+        if (HlsSupport.isHlsUrl(url)) {
+            return downloadHls(url, targetFile, shouldStop, onState)
+        }
         val probe = try {
             fetcher.probe(url)
         } catch (e: FetchHttpException) {
@@ -218,6 +226,100 @@ class SegmentedDownloader(
         }
         return runSingleStream(url, targetFile, resumeFrom, total, shouldStop, onState)
     }
+
+    // ------------------------------------------------------------------
+    // HLS (playlist) download — one local file out of many segments
+    // ------------------------------------------------------------------
+
+    /**
+     * Downloads an HLS stream into [targetFile]: master playlist →
+     * best variant → ordered segments (+ optional fMP4 init segment,
+     * optional AES-128 decryption). HLS is not resumable mid-stream —
+     * a retry restarts cleanly (the file is rewritten from scratch).
+     */
+    private suspend fun downloadHls(
+        url: String,
+        targetFile: File,
+        shouldStop: () -> Boolean,
+        onState: (DownloadSnapshot) -> Unit
+    ): DownloadOutcome = withContext(Dispatchers.IO) {
+        try {
+            val masterText = readAllBytes(url).toString(Charsets.UTF_8.name())
+            val variants = HlsSupport.parseMaster(masterText, url)
+            val mediaUrl = variants.firstOrNull()?.uri ?: url
+            val mediaText = readAllBytes(mediaUrl).toString(Charsets.UTF_8.name())
+            val playlist = HlsSupport.parseMedia(mediaText, mediaUrl)
+            if (playlist.segments.isEmpty()) {
+                return@withContext DownloadOutcome.Failed(
+                    "The stream playlist has no segments.",
+                    DownloadSnapshot(emptyList(), -1, true)
+                )
+            }
+            val keyBytes = playlist.keyUri?.let { readAllBytes(it) }
+
+            var written = 0L
+            val totalGuess = -1L
+            val snapshot = {
+                DownloadSnapshot(
+                    segments = listOf(DownloadSegment(0, written.coerceAtLeast(1), written)),
+                    totalBytes = totalGuess,
+                    singleStream = true
+                )
+            }
+
+            targetFile.outputStream().use { out ->
+                playlist.initUri?.let { initRef ->
+                    val initBytes = readAllBytes(initRef)
+                    out.write(initBytes)
+                    written += initBytes.size
+                }
+                for ((index, segmentRef) in playlist.segments.withIndex()) {
+                    if (shouldStop()) {
+                        out.flush()
+                        return@withContext DownloadOutcome.Paused(snapshot())
+                    }
+                    var data = readAllBytes(segmentRef)
+                    if (keyBytes != null) {
+                        data = HlsSupport.decryptAes128(
+                            key = keyBytes,
+                            iv = HlsSupport.ivFor(playlist, index),
+                            data = data
+                        )
+                    }
+                    out.write(data)
+                    written += data.size
+                    onState(snapshot())
+                }
+                out.flush()
+            }
+            onState(snapshot())
+            DownloadOutcome.Completed(written)
+        } catch (e: StopRequested) {
+            DownloadOutcome.Paused(
+                DownloadSnapshot(emptyList(), -1, true)
+            )
+        } catch (e: IOException) {
+            DownloadOutcome.Failed(
+                e.message ?: "Download failed.",
+                DownloadSnapshot(emptyList(), -1, true)
+            )
+        } catch (e: IllegalArgumentException) {
+            // Unsupported encryption (SAMPLE-AES etc.): say so plainly.
+            DownloadOutcome.Failed(
+                e.message ?: "Unsupported stream format.",
+                DownloadSnapshot(emptyList(), -1, true)
+            )
+        } catch (e: FetchHttpException) {
+            DownloadOutcome.Failed(
+                e.message ?: "Download failed.",
+                DownloadSnapshot(emptyList(), -1, true)
+            )
+        }
+    }
+
+    /** Whole-body fetch via the injected [RangeFetcher] (no ranges). */
+    private fun readAllBytes(url: String): ByteArray =
+        fetcher.open(url, null, null).use { it.readBytes() }
 
     // ------------------------------------------------------------------
     // Segmented transfer

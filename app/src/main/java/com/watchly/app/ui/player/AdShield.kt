@@ -48,6 +48,29 @@ internal fun isSniffableDirectMedia(url: String): Boolean {
 }
 
 /**
+ * True when a page that LOADED FINE is a dead end: its visible text
+ * says the media is gone ("MEDIA NOT FOUND" and friends) and there is
+ * no video element on the page. These pages previously hung the
+ * player forever because HTTP 200 looks like success.
+ */
+internal fun isDeadPageText(pageText: String, hasVideoElement: Boolean = false): Boolean {
+    if (hasVideoElement) return false
+    val text = pageText.lowercase()
+    if (text.length > 4_000) return false
+    val patterns = listOf(
+        "media not found", "video not found", "file not found",
+        "movie not found", "episode not found", "content not found",
+        "content unavailable", "content not available",
+        "video has been removed", "video is unavailable",
+        "no sources found", "no sources available",
+        "stream not found", "stream is unavailable",
+        "this video is not available", "sorry, this video",
+        "could not be found", "has been deleted", "was not found"
+    )
+    return patterns.any { text.contains(it) }
+}
+
+/**
  * Anti-popup + in-page ad/overlay cleaner. Kills window.open and
  * target=_blank hijacks, hides banner/ad/consent nodes by class or id,
  * drops sticky top bars above the player, and re-runs via MutationObserver
@@ -100,6 +123,31 @@ internal val AD_CLEAN_JS = """
               el.style.setProperty('max-height', '0', 'important');
               el.style.setProperty('overflow', 'hidden', 'important');
             }
+          } catch (e) {}
+        });
+        // Centered fake dialogs / prize notifications / popup boxes:
+        // any fixed or absolute layer floating OVER the page that does
+        // not contain the player and does contain tappable controls.
+        // This is the "scam popup with a phone number" class of junk,
+        // which usually carries neutral class names the keyword scan
+        // above cannot see.
+        document.querySelectorAll('body *').forEach(function(el) {
+          try {
+            if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'SOURCE') return;
+            if (el.tagName === 'VIDEO' || el.tagName === 'AUDIO') return;
+            if (el.querySelector('video') || isPlayerNode(el)) return;
+            if (el.querySelector('iframe')) return;
+            var cs = window.getComputedStyle(el);
+            if (cs.position !== 'fixed' && cs.position !== 'absolute' && cs.position !== 'sticky') return;
+            var z = parseInt(cs.zIndex || '0', 10);
+            if (z < 200) return;
+            var r = el.getBoundingClientRect();
+            if (r.width < window.innerWidth * 0.4) return;
+            if (r.height < 44 || r.height > window.innerHeight * 0.92) return;
+            if (el.querySelectorAll('a,button,input,[role="button"]').length === 0) return;
+            el.style.setProperty('display', 'none', 'important');
+            el.style.setProperty('visibility', 'hidden', 'important');
+            el.style.setProperty('pointer-events', 'none', 'important');
           } catch (e) {}
         });
         // Sticky/fixed bars pinned to the TOP of the page (the "ads at the

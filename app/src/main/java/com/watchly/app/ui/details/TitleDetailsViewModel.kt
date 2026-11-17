@@ -285,7 +285,13 @@ class TitleDetailsViewModel(
     /** Cycle 10: the user's own ratings (§4.2). */
     private val ratings: com.watchly.app.data.library.RatingsRepository? = null,
     /** Cycle 10: UI preferences — the download path reads Data Saver. */
-    private val uiPrefs: com.watchly.app.data.settings.UiPreferencesRepository? = null
+    private val uiPrefs: com.watchly.app.data.settings.UiPreferencesRepository? = null,
+    /**
+     * MovieBox parity: when provided, the download path captures the
+     * real file hidden inside player pages (headless sniff) so Download
+     * works WITHOUT playing first. Null in tests (no WebView there).
+     */
+    private val appContext: android.content.Context? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -825,8 +831,43 @@ class TitleDetailsViewModel(
                         }.getOrDefault(
                             com.watchly.app.data.playback.ResolvedPlayable.NOT_PLAYABLE
                         )
-                        val direct = resolved.files.filter {
+                        var direct = resolved.files.filter {
                             it.format != "EMBED" && it.url.startsWith("http")
+                        }
+                        if (direct.isEmpty()) {
+                            // MovieBox parity: capture the real file hidden
+                            // inside the player pages — Download must work
+                            // WITHOUT playing first.
+                            val ctx = appContext
+                            val embeds = resolved.files
+                                .filter { it.format == "EMBED" && it.url.startsWith("http") }
+                                .map { it.url }
+                            if (ctx != null && embeds.isNotEmpty()) {
+                                val sniffed = runCatching {
+                                    com.watchly.app.ui.player.HeadlessStreamResolver
+                                        .sniff(ctx, embeds)
+                                }.getOrNull()
+                                if (sniffed != null) {
+                                    com.watchly.app.data.model.PlayableMediaHeaders
+                                        .register(sniffed.url, sniffed.headers)
+                                    direct = listOf(
+                                        PlayableFile(
+                                            url = sniffed.url,
+                                            fileName = state.title.name,
+                                            format = if (sniffed.url.contains(
+                                                    ".m3u8", ignoreCase = true
+                                                )
+                                            ) {
+                                                "HLS"
+                                            } else {
+                                                "MP4"
+                                            },
+                                            qualityLabel = "Auto HD",
+                                            headers = sniffed.headers
+                                        )
+                                    )
+                                }
+                            }
                         }
                         if (direct.isEmpty()) {
                             _uiState.update {
@@ -1027,7 +1068,8 @@ class TitleDetailsViewModelFactory(
                 externalIdCache =
                     com.watchly.app.data.remote.SharedPreferencesExternalIdCache(app),
                 ratings = com.watchly.app.data.library.RatingsRepository(app),
-                uiPrefs = com.watchly.app.data.settings.UiPreferencesRepository(app)
+                uiPrefs = com.watchly.app.data.settings.UiPreferencesRepository(app),
+                appContext = app
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: $modelClass")

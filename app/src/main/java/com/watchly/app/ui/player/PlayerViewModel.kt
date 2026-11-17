@@ -175,7 +175,13 @@ class PlayerViewModel(
                 season = season,
                 episode = episode
             )
-        }
+        },
+    /**
+     * MovieBox-parity headless file capture (hidden WebView sniffs the
+     * real .m3u8/.mp4 out of a player page). Null in tests — no WebView
+     * there; the factory wires the real resolver.
+     */
+    private val headlessSniff: (suspend (Context, List<String>) -> SniffedMedia?)? = null
 ) : ViewModel() {
 
     /**
@@ -270,21 +276,54 @@ class PlayerViewModel(
                     }
                     startWithFiles(orderedDirects)
                 } else if (resolved.webEmbedUrl != null || request.preferredEmbedUrl != null) {
-                    // Start on the source that worked last time when it is
-                    // still on the server list — one-tap "it just plays".
-                    val remembered = playback.getQualityUrl(scopedKey)
-                    val activeEmbed = request.preferredEmbedUrl
-                        ?: embeds.firstOrNull { it.url == remembered }?.url
-                        ?: resolved.webEmbedUrl
-                    _uiState.update {
-                        it.copy(
-                            webEmbedUrl = activeEmbed,
-                            embedServers = embeds,
-                            files = resolved.files,
-                            isBuffering = false
-                        )
+                    // MovieBox parity: capture the REAL file hidden inside
+                    // the player page first — native playback, zero ads,
+                    // and the same file powers Download. The WebView player
+                    // appears only when nothing can be captured.
+                    val candidateEmbeds = (
+                        listOfNotNull(request.preferredEmbedUrl) +
+                            embeds.map { it.url } +
+                            listOfNotNull(resolved.webEmbedUrl)
+                        ).distinct().take(3)
+                    val sniffed = headlessSniff?.let { sniffFn ->
+                        runCatching { sniffFn(appContext, candidateEmbeds) }.getOrNull()
                     }
-                    recordCloudStreamProgress(request.title, request.episodeLabel)
+                    if (sniffed != null) {
+                        com.watchly.app.data.model.PlayableMediaHeaders
+                            .register(sniffed.url, sniffed.headers)
+                        val sniffedFile = PlayableFile(
+                            url = sniffed.url,
+                            fileName = request.title.name,
+                            format = if (sniffed.url.contains(".m3u8", ignoreCase = true)) "HLS" else "MP4",
+                            qualityLabel = "Auto HD",
+                            headers = sniffed.headers
+                        )
+                        _uiState.update {
+                            it.copy(
+                                files = listOf(sniffedFile),
+                                embedServers = embeds,
+                                isBuffering = false
+                            )
+                        }
+                        recordCloudStreamProgress(request.title, request.episodeLabel)
+                        startWithFiles(listOf(sniffedFile))
+                    } else {
+                        // Start on the source that worked last time when it is
+                        // still on the server list — one-tap "it just plays".
+                        val remembered = playback.getQualityUrl(scopedKey)
+                        val activeEmbed = request.preferredEmbedUrl
+                            ?: embeds.firstOrNull { it.url == remembered }?.url
+                            ?: resolved.webEmbedUrl
+                        _uiState.update {
+                            it.copy(
+                                webEmbedUrl = activeEmbed,
+                                embedServers = embeds,
+                                files = resolved.files,
+                                isBuffering = false
+                            )
+                        }
+                        recordCloudStreamProgress(request.title, request.episodeLabel)
+                    }
                 } else if (resolved.youtubeVideoId != null) {
                     _uiState.update { it.copy(youtubeVideoId = resolved.youtubeVideoId, isBuffering = false) }
                 } else {
@@ -1299,6 +1338,9 @@ class PlayerViewModelFactory(
                         title,
                         com.watchly.app.data.downloads.DownloadsRepository(appContext)
                     )
+                },
+                headlessSniff = { ctx, urls ->
+                    HeadlessStreamResolver.sniff(ctx, urls)
                 }
             ) as T
         }

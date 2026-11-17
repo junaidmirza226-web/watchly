@@ -46,4 +46,27 @@ class AdShieldTest {
         // Sticky top bars (the "ads at the top of the video") collapse:
         assertTrue(AD_CLEAN_JS.contains("position === 'fixed'"))
     }
+
+    @Test
+    fun deadPagesAreDetectedOnlyWhenThereIsNoVideo() {
+        // The screenshot class of dead end: HTTP 200 + "MEDIA NOT FOUND".
+        assertTrue(isDeadPageText("MEDIA NOT FOUND"))
+        assertTrue(isDeadPageText("Sorry, this video is not available"))
+        assertTrue(isDeadPageText("Video has been removed"))
+        // A working player page is never treated as dead…
+        assertFalse(isDeadPageText("MEDIA NOT FOUND", hasVideoElement = true))
+        assertFalse(isDeadPageText("Play 0:00 / 1:52:33 Subtitles Quality"))
+        // …and a long real page never matches on stray words.
+        assertFalse(isDeadPageText("x".repeat(5_000)))
+    }
+
+    @Test
+    fun adCleanerJsKillsCenteredScamOverlaysToo() {
+        // The fake "prize / WhatsApp" popup class: neutral class names,
+        // centred over the page — caught by geometry, not keywords:
+        assertTrue(AD_CLEAN_JS.contains("zIndex"))
+        assertTrue(AD_CLEAN_JS.contains("getBoundingClientRect"))
+        // …while the player container stays untouched:
+        assertTrue(AD_CLEAN_JS.contains("isPlayerNode(el)"))
+    }
 }

@@ -221,6 +221,40 @@ fun WebStreamPlayerLayout(
                             // Never allow ad popups to open secondary windows
                             return false
                         }
+
+                        // Fake "system" alert/confirm/prompt dialogs (the
+                        // "your phone is infected / you won a prize" class)
+                        // are swallowed whole — the player never needs one.
+                        override fun onJsAlert(
+                            view: WebView?,
+                            url: String?,
+                            message: String?,
+                            result: android.webkit.JsResult?
+                        ): Boolean {
+                            result?.confirm()
+                            return true
+                        }
+
+                        override fun onJsConfirm(
+                            view: WebView?,
+                            url: String?,
+                            message: String?,
+                            result: android.webkit.JsResult?
+                        ): Boolean {
+                            result?.confirm()
+                            return true
+                        }
+
+                        override fun onJsPrompt(
+                            view: WebView?,
+                            url: String?,
+                            message: String?,
+                            defaultValue: String?,
+                            result: android.webkit.JsPromptResult?
+                        ): Boolean {
+                            result?.confirm(defaultValue)
+                            return true
+                        }
                     }
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(
@@ -271,6 +305,30 @@ fun WebStreamPlayerLayout(
                             super.onPageFinished(view, url)
                             view?.evaluateJavascript(AD_CLEAN_JS, null)
                             isPageLoading = false
+                            // Dead-end detection: a page can load perfectly
+                            // (HTTP 200) and still say "MEDIA NOT FOUND".
+                            // Read the visible text + video count and switch
+                            // source instead of spinning forever.
+                            if (!deadReported.value) {
+                                view?.evaluateJavascript(
+                                    "(function(){try{" +
+                                        "var t=(document.body&&document.body.innerText||'').slice(0,4000);" +
+                                        "var v=document.querySelectorAll('video').length;" +
+                                        "return JSON.stringify([t,v]);}catch(e){return '[\"\",0]';}})()"
+                                ) { raw ->
+                                    val parsed = runCatching {
+                                        val inner = org.json.JSONTokener(raw).nextValue() as? String
+                                            ?: return@runCatching null
+                                        val arr = org.json.JSONArray(inner)
+                                        arr.getString(0) to (arr.getInt(1) > 0)
+                                    }.getOrNull()
+                                    val (pageText, hasVideo) = parsed ?: return@evaluateJavascript
+                                    if (isDeadPageText(pageText, hasVideo) && !deadReported.value) {
+                                        deadReported.value = true
+                                        view?.post { onSourceDead() }
+                                    }
+                                }
+                            }
                         }
 
                         override fun shouldInterceptRequest(
