@@ -121,3 +121,69 @@ before you see it).
 - **C. Update notice**: keep the gold banner on Home, or make it a small
   pill in Settings only (cleaner home)?
 - **D. Anything to add/remove/reprioritize** in the three phases?
+
+---
+
+# v2 Plan — Verified sources, real dubs, real qualities (for review before any code)
+
+Status: PLAN ONLY. Nothing here is implemented yet. Each step ships only after
+its tests pass in CI and, where live sources are involved, after a live probe.
+
+## What the evidence says today (2026-11-17)
+- Live capture from GitHub's network (CI emulator, app's own sniffer): **0 of 6**
+  embed sources produced a playable file. Embed.su loads its page, makes one
+  request, then stays idle for 20 s.
+- Provider health checks only prove a host answers (HEAD 200). They do not prove
+  playback. The "provider list" we show is therefore not a list of working sources.
+- Dub detection today matches words in a URL or label ("hindi", "dual audio").
+  It is guesswork, which is why real dubs are not reliably shown.
+- Quality options today are not read from the file itself.
+- Decompiling MovieBox needs its APK. The sandbox cannot download it (only GitHub
+  and package registries are reachable). Tooling is prepared: Androguard 4.1.4 +
+  a Java 25 runtime (both installed). JADX itself is not reachable from here.
+  **Needed from you: export the MovieBox APK (e.g. via a file manager's Share →
+  "Extract/Share APK", or Split-APK installer export) and upload it.**
+
+## Step 1 — Verified-only source list per title (automation, no clutter)
+- For each title/episode, run the sniffer in the background against each enabled
+  embed source; keep ONLY sources that actually produced a playable file.
+- Store the result per title+episode with a short expiry (e.g. 6 h) and a
+  per-source health score that decays on failures.
+- UI shows only verified sources. If none verify: one honest line
+  "No working stream right now" + Retry. No dead names are ever listed.
+- Test: unit tests for the ranking/expiry; instrumented test on fixture pages
+  (one working, one dead) to prove only the working one is listed.
+
+## Step 2 — Real dubs from the file, not from words
+- Parse the captured HLS master playlist: `#EXT-X-MEDIA:TYPE=AUDIO` with
+  `LANGUAGE` / `NAME` gives the real audio tracks.
+- Show those as "Audio" choices in the player; download keeps the chosen track.
+- Providers that expose only separate files give one file per dub; each becomes
+  its own verified entry (Step 1).
+- Remove the word-matching dub guess entirely (no fake dub labels).
+- Test: fixture master playlists with 1, 2 and 3 audio renditions.
+
+## Step 3 — Real quality choices per file (720 / 480 / 360 …)
+- Parse `#EXT-X-STREAM-INF:RESOLUTION=WxH` from the same master playlist.
+- The menu shows ONLY heights the file really has (e.g. a file with 720 and 360
+  shows exactly those two). A single-quality file shows one option, no fakes.
+- Download can use the same chosen variant (HlsSupport already parses variants).
+- Test: fixtures with 1, 3 and 4 variants; assert the menu equals the file.
+
+## Step 4 — Competitor teardown (needs your MovieBox APK)
+- Androguard + Java runtime: manifest, permissions, resources, Smali-level
+  checks, and Java-like output for the parts we need (player, download, UI
+  structure). Written up as docs/competitor-analysis.md section "MovieBox
+  mechanics (verified from APK)" — facts only, no copied code.
+- Same for any other app you name (APK upload required for each).
+
+## Step 5 — Premium polish (after 1–3 are verified)
+- Pre-resolve the next episode, remember the working source, instant resume,
+  update flow already hardened (see §4.1 above).
+
+## Decisions I need from you
+1. Upload the MovieBox APK (for Step 4) — and tell me any other app you want analysed.
+2. OK to show "No working stream right now" when nothing verifies (instead of a
+   long list of dead names)? (Recommended: yes.)
+3. Quality menu: show only what each file really has (recommended), or keep fixed
+   720/480/360 labels that may not exist for a file?
