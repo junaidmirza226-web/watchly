@@ -304,6 +304,9 @@ fun WebStreamPlayerLayout(
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
                             view?.evaluateJavascript(AD_CLEAN_JS, null)
+                            // Boot stuck players: pages that wait for a tap
+                            // to start the media ("keeps loading" forever).
+                            view?.evaluateJavascript(SNIFF_BOOT_JS, null)
                             isPageLoading = false
                             // Dead-end detection: a page can load perfectly
                             // (HTTP 200) and still say "MEDIA NOT FOUND".

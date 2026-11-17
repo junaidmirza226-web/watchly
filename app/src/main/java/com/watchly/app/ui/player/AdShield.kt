@@ -51,6 +51,34 @@ internal fun isSniffableDirectMedia(url: String): Boolean {
 }
 
 /**
+ * Force-start boot: embed pages that wait for a tap (#bigPlay, the
+ * `autoStart:false` landing class) or ship a <video> that needs
+ * .play() get booted so the media request actually happens — the
+ * sniff can capture it and the visible player stops "just loading".
+ * The play matcher is deliberately tight (known ids + exact "play"
+ * label) so it can never click purchase/rent-style controls.
+ */
+internal val SNIFF_BOOT_JS = """
+(function() {
+  try {
+    document.querySelectorAll('video').forEach(function(v) {
+      try { var p = v.play(); if (p && p.catch) p.catch(function(){}); } catch (e) {}
+    });
+    var ids = ['bigPlay', 'bigplay', 'play-button', 'playButton', 'play_btn'];
+    for (var i = 0; i < ids.length; i++) {
+      var el = document.getElementById(ids[i]);
+      if (el) { try { el.click(); } catch (e) {} }
+    }
+    document.querySelectorAll('button,[role="button"]').forEach(function(el) {
+      try {
+        if ((el.textContent || '').trim().toLowerCase() === 'play') el.click();
+      } catch (e) {}
+    });
+  } catch (e) {}
+})();
+"""
+
+/**
  * True when a page that LOADED FINE is a dead end: its visible text
  * says the media is gone ("MEDIA NOT FOUND" and friends) and there is
  * no video element on the page. These pages previously hung the

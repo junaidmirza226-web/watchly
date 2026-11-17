@@ -72,4 +72,14 @@ class AdShieldTest {
         // …while the player container stays untouched:
         assertTrue(AD_CLEAN_JS.contains("isPlayerNode(el)"))
     }
+
+    @Test
+    fun bootJsForceStartsMediaWithoutClickingJunk() {
+        // Force-starts <video> and known play buttons (autoStart:false
+        // landings) so the media request happens at all:
+        assertTrue(SNIFF_BOOT_JS.contains("v.play()"))
+        assertTrue(SNIFF_BOOT_JS.contains("bigPlay"))
+        // …but only exact "play" labels, never purchase/rent controls:
+        assertTrue(SNIFF_BOOT_JS.contains("=== 'play'"))
+    }
 }

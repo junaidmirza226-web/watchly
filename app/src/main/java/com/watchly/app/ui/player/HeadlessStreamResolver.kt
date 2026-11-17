@@ -111,6 +111,9 @@ object HeadlessStreamResolver {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
                         view?.evaluateJavascript(AD_CLEAN_JS, null)
+                        // Boot the media request (autoStart:false landings
+                        // and plain <video> elements) so it can be sniffed.
+                        view?.evaluateJavascript(SNIFF_BOOT_JS, null)
                     }
 
                     override fun shouldInterceptRequest(
