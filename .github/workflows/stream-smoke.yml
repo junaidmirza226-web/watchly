@@ -9,6 +9,8 @@ name: Stream Smoke
 
 on:
   workflow_dispatch:
+  push:
+    branches: [arena/e6847c87-watchly]
 
 permissions:
   contents: read
