@@ -96,4 +96,42 @@ class AppUpdateCheckerTest {
         )
         assertNull(AppUpdateChecker.newestVersion(emptyList()))
     }
+
+    @Test
+    fun identicalBuildNeverReachesInstaller() {
+        val v = AppUpdateChecker.judgeApk(archiveCode = 79, archiveName = "1.5.1.79", installedCode = 79, promisedVersion = "1.5.1.85")
+        assertTrue(v is AppUpdateChecker.ApkVerdict.WrongVersion)
+        assertEquals(
+            AppUpdateChecker.ApkVerdict.SameOrOlder,
+            AppUpdateChecker.judgeApk(archiveCode = 79, archiveName = "1.5.1.79", installedCode = 79, promisedVersion = null)
+        )
+        assertEquals(
+            AppUpdateChecker.ApkVerdict.SameOrOlder,
+            AppUpdateChecker.judgeApk(archiveCode = 78, archiveName = "1.5.1.78", installedCode = 79, promisedVersion = null)
+        )
+    }
+
+    @Test
+    fun matchingNewerBuildIsInstalled() {
+        assertEquals(
+            AppUpdateChecker.ApkVerdict.Install,
+            AppUpdateChecker.judgeApk(archiveCode = 85, archiveName = "1.5.1.85", installedCode = 79, promisedVersion = "v1.5.1.85")
+        )
+    }
+
+    @Test
+    fun wrongPromisedVersionIsRejected() {
+        assertTrue(
+            AppUpdateChecker.judgeApk(archiveCode = 84, archiveName = "1.5.1.84", installedCode = 79, promisedVersion = "1.5.1.85")
+                is AppUpdateChecker.ApkVerdict.WrongVersion
+        )
+    }
+
+    @Test
+    fun unreadableFileIsRejected() {
+        assertEquals(
+            AppUpdateChecker.ApkVerdict.Unreadable,
+            AppUpdateChecker.judgeApk(archiveCode = -1, archiveName = null, installedCode = 79, promisedVersion = null)
+        )
+    }
 }

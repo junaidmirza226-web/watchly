@@ -201,6 +201,34 @@ object AppUpdateChecker {
             }
     }
 
+    /** Outcome of checking a downloaded APK before the installer is allowed to open. */
+    sealed interface ApkVerdict {
+        data object Install : ApkVerdict
+        /** The file is the same build (or older) than what is installed. Never sent to the installer. */
+        data object SameOrOlder : ApkVerdict
+        /** The file is not the version the update promised. */
+        data class WrongVersion(val promised: String, val found: String) : ApkVerdict
+        data object Unreadable : ApkVerdict
+    }
+
+    /**
+     * Pure decision used by [startUpdate]. [archiveCode] is -1 when the file
+     * could not be read as an APK. [promisedVersion] null = no promise to check.
+     */
+    fun judgeApk(
+        archiveCode: Long,
+        archiveName: String?,
+        installedCode: Long,
+        promisedVersion: String?
+    ): ApkVerdict {
+        if (archiveCode < 0 || archiveName.isNullOrBlank()) return ApkVerdict.Unreadable
+        if (promisedVersion != null && archiveName.removePrefix("v").trim() != promisedVersion.removePrefix("v").trim()) {
+            return ApkVerdict.WrongVersion(promisedVersion, archiveName)
+        }
+        if (installedCode >= 0 && archiveCode <= installedCode) return ApkVerdict.SameOrOlder
+        return ApkVerdict.Install
+    }
+
     /** Picks the APK asset download URL from a release JSON (watchly.apk first). */
     fun pickApkAsset(releaseJson: JSONObject): String? {
         val assets = releaseJson.optJSONArray("assets") ?: return null
@@ -307,24 +335,34 @@ object AppUpdateChecker {
                 } ?: -1L
                 val archiveName = archive?.versionName ?: "?"
                 val installedCode = currentVersionCode(appContext)
-                val promiseKept = promisedVersion == null ||
-                    !isNewerVersion(current = archiveName, remote = promisedVersion)
-                if (archive == null || target.length() < 100_000L ||
-                    archiveCode <= installedCode || !promiseKept
-                ) {
-                    target.delete()
-                    val promiseNote = promisedVersion?.let {
-                        if (promiseKept) "" else " The update was promised as $it."
-                    } ?: ""
-                    _installState.value = InstallState.Error(
-                        "Downloaded file is build $archiveName (code $archiveCode) but you already " +
-                            "have ${currentVersion(appContext)} (code $installedCode).$promiseNote " +
-                            "Tap Update to try again."
-                    )
-                    return@launch
+                val verdict = judgeApk(
+                    archiveCode = if (archive == null || target.length() < 100_000L) -1L else archiveCode,
+                    archiveName = archiveName,
+                    installedCode = installedCode,
+                    promisedVersion = promisedVersion
+                )
+                when (verdict) {
+                    ApkVerdict.Install -> installApk(appContext, target)
+                    ApkVerdict.SameOrOlder -> {
+                        target.delete()
+                        _installState.value = InstallState.Error(
+                            "You're already on the latest version (${currentVersion(appContext) ?: "installed"})."
+                        )
+                    }
+                    is ApkVerdict.WrongVersion -> {
+                        target.delete()
+                        _installState.value = InstallState.Error(
+                            "The update file didn't match the offered version " +
+                                "(expected ${verdict.promised}, got ${verdict.found}). Tap Update to try again."
+                        )
+                    }
+                    ApkVerdict.Unreadable -> {
+                        target.delete()
+                        _installState.value = InstallState.Error(
+                            "The download was incomplete. Tap Update to try again."
+                        )
+                    }
                 }
-
-                installApk(appContext, target)
             } catch (t: Throwable) {
                 _installState.value = InstallState.Error(
                     t.message ?: "Download failed — try again."
