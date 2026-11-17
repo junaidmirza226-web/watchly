@@ -835,7 +835,7 @@ fun WebStreamPlayerLayout(
 }
 
 /** How long a source may sit "loading" before it counts as dead. */
-private const val LOAD_DEADLINE_MS = 60_000L
+private const val LOAD_DEADLINE_MS = 20_000L
 
 /**
  * True when a WebView load failure means the SOURCE itself is dead

@@ -56,6 +56,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
 
 data class TitleDetailsUiState(
@@ -269,6 +270,9 @@ internal fun pickNameYearMatch(results: List<Title>, title: Title): Title? {
     return candidates.firstOrNull { it.year != null && it.year == title.year }
         ?: candidates.firstOrNull { title.year == null }
 }
+
+/** Hard cap on the "Finding a downloadable file" lookup so it can never spin forever. */
+private const val DOWNLOAD_LOOKUP_BUDGET_MS = 40_000L
 
 class TitleDetailsViewModel(
     private val title: Title,
@@ -825,12 +829,15 @@ class TitleDetailsViewModel(
                     // the real files now, then start the download.
                     viewModelScope.launch {
                         _uiState.update { it.copy(infoMessage = "Finding a downloadable file…") }
-                        val resolved = runCatching {
-                            com.watchly.app.data.playback.PlayableSourceResolver
-                                .resolve(state.title, downloads)
-                        }.getOrDefault(
-                            com.watchly.app.data.playback.ResolvedPlayable.NOT_PLAYABLE
-                        )
+                        // Hard cap: the lookup can never leave the message stuck.
+                        val resolved = withTimeoutOrNull(DOWNLOAD_LOOKUP_BUDGET_MS) {
+                            runCatching {
+                                com.watchly.app.data.playback.PlayableSourceResolver
+                                    .resolve(state.title, downloads)
+                            }.getOrDefault(
+                                com.watchly.app.data.playback.ResolvedPlayable.NOT_PLAYABLE
+                            )
+                        } ?: com.watchly.app.data.playback.ResolvedPlayable.NOT_PLAYABLE
                         var direct = resolved.files.filter {
                             it.format != "EMBED" && it.url.startsWith("http")
                         }
@@ -843,10 +850,12 @@ class TitleDetailsViewModel(
                                 .filter { it.format == "EMBED" && it.url.startsWith("http") }
                                 .map { it.url }
                             if (ctx != null && embeds.isNotEmpty()) {
-                                val sniffed = runCatching {
-                                    com.watchly.app.ui.player.HeadlessStreamResolver
-                                        .sniff(ctx, embeds)
-                                }.getOrNull()
+                                val sniffed = withTimeoutOrNull(DOWNLOAD_LOOKUP_BUDGET_MS) {
+                                    runCatching {
+                                        com.watchly.app.ui.player.HeadlessStreamResolver
+                                            .sniff(ctx, embeds)
+                                    }.getOrNull()
+                                }
                                 if (sniffed != null) {
                                     com.watchly.app.data.model.PlayableMediaHeaders
                                         .register(sniffed.url, sniffed.headers)
