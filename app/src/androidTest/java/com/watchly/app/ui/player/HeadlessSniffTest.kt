@@ -25,7 +25,7 @@ class HeadlessSniffTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val page = "data:text/html," +
             java.net.URLEncoder.encode(
-                "<html><body><video " +
+                "<html><body><video autoplay preload=\"auto\" " +
                     "src=\"https://fake.test/movie/master.m3u8\"></video></body></html>",
                 "UTF-8"
             )

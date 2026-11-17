@@ -309,11 +309,6 @@ class SegmentedDownloader(
                 e.message ?: "Unsupported stream format.",
                 DownloadSnapshot(emptyList(), -1, true)
             )
-        } catch (e: FetchHttpException) {
-            DownloadOutcome.Failed(
-                e.message ?: "Download failed.",
-                DownloadSnapshot(emptyList(), -1, true)
-            )
         }
     }
 
