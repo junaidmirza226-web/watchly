@@ -41,7 +41,7 @@ class HlsDownloadTest {
 
     @Test
     fun clearHlsDownloadsInitPlusSegmentsInOrder() {
-        val baseUrl = "https://cdn.test/movie/"
+        val baseUrl = "https://cdn.test/movie"
         val fixtures = mapOf(
             "$baseUrl/master.m3u8" to """
                 #EXTM3U
@@ -87,7 +87,7 @@ class HlsDownloadTest {
 
     @Test
     fun aes128SegmentsAreDecrypted() {
-        val baseUrl = "https://cdn.test/enc/"
+        val baseUrl = "https://cdn.test/enc"
         val key = ByteArray(16) { it.toByte() }
         val plain = "hello-MovieBox-parity!".toByteArray()
         val iv = ByteArray(16) // sequence 0 → all-zero IV
@@ -124,7 +124,7 @@ class HlsDownloadTest {
 
     @Test
     fun sampleAesFailsHonestly() {
-        val baseUrl = "https://cdn.test/sa/"
+        val baseUrl = "https://cdn.test/sa"
         val fixtures = mapOf(
             "$baseUrl/variant.m3u8" to """
                 #EXTM3U
