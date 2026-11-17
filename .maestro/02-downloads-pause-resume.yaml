@@ -75,7 +75,7 @@ appId: com.watchly.app
 # Library: Downloads section + the new engine's controls.
 - tapOn: "My Library"
 - extendedWaitUntil:
-    visible: "Profiles"
+    visible: "Watchlist"
     timeout: 20000
 - scrollUntilVisible:
     element: "Downloads"

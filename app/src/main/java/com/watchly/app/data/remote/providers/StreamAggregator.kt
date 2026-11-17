@@ -51,16 +51,11 @@ object StreamAggregator {
             }
 
         val sources = mutableListOf<StreamSource>()
-        // Branded consumer services first (Netflix, Amazon Prime Video,
-        // Disney+ Hotstar, Zee5 …) so Sources/Servers show what people look
-        // for; the raw embed hosts below stay as instant backups.
-        sources += OttServices.buildSources(
-            tmdbId = tmdbId,
-            imdbId = imdbId,
-            mediaType = title.mediaType,
-            season = season,
-            episode = episode
-        )
+        // Real multi-server players first (VidLink, VidSrc, MultiEmbed …):
+        // they auto-failover internally and actually start playback fast.
+        // The branded service entries (Netflix, Prime, Hotstar …) are
+        // last-resort fallbacks — playback must never stall on a costume
+        // before a working source has been tried.
         for (entry in entries) {
             val embedUrl = buildEmbedUrlForEntry(
                 entry = entry,
@@ -88,6 +83,13 @@ object StreamAggregator {
                 )
             )
         }
+        sources += OttServices.buildSources(
+            tmdbId = tmdbId,
+            imdbId = imdbId,
+            mediaType = title.mediaType,
+            season = season,
+            episode = episode
+        )
         return sources.distinctBy { it.url }
     }
 

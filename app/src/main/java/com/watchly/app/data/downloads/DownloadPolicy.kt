@@ -14,9 +14,9 @@
  *         starts on mobile data while it is on.
  *       · Pause on low battery (a setting): a download does not
  *         start while the battery is low and not charging.
- *       · Storage cap (a setting, 10 GB by default): a download
- *         that would push Watchly past the cap is refused, and
- *         one that crosses 90% of the cap starts with a warning.
+ *       · Storage cap: unlimited by default — the phone's own free
+ *         space is the limit. The cap machinery stays for installs
+ *         that still carry an old finite setting.
  *       · Free space: a download bigger than the phone's free
  *         space is refused up front, instead of dying halfway.
  *     Mid-download, the system DownloadManager still stops a
@@ -34,8 +34,8 @@ data class DownloadSettings(
     val storageCapBytes: Long = DEFAULT_STORAGE_CAP_BYTES
 ) {
     companion object {
-        /** Spec §7.3's example cap: 10 GB. */
-        const val DEFAULT_STORAGE_CAP_BYTES: Long = 10_000_000_000L
+        /** No artificial cap: downloads fill the phone's free space. */
+        const val DEFAULT_STORAGE_CAP_BYTES: Long = Long.MAX_VALUE
 
         /** Fraction of the cap at which the user gets a warning. */
         const val CAP_WARNING_FRACTION = 0.9

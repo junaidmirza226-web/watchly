@@ -15,8 +15,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -44,8 +42,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -162,25 +158,9 @@ fun LibraryScreen(
             contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            item {
-                ProfilesCard(
-                    profiles = state.profiles,
-                    activeProfile = state.activeProfile,
-                    profileMessage = state.profileMessage,
-                    onSwitchProfile = { profileId ->
-                        if (viewModel.switchProfile(profileId)) {
-                            onProfileSwitched()
-                        }
-                    },
-                    onCreateProfile = viewModel::createProfile,
-                    onRenameProfile = viewModel::renameProfile,
-                    onDeleteProfile = { profileId ->
-                        if (viewModel.deleteProfile(profileId)) {
-                            onProfileSwitched()
-                        }
-                    }
-                )
-            }
+            // (Profiles card removed on request: there is no account or
+            // cloud sync behind it, so showing a "who's watching" switcher
+            // promised something the app does not do.)
 
             if (state.continueWatching.isNotEmpty()) {
                 item(key = "continue_watching") {
@@ -262,6 +242,10 @@ fun LibraryScreen(
                 )
             }
 
+            item(key = "settings_heading") {
+                SectionHeading("Settings")
+            }
+
             item(key = "playback_settings") {
                 PlaybackSettingsCard(
                     autoplayNext = state.autoplayNext,
@@ -281,8 +265,7 @@ fun LibraryScreen(
                     settings = state.downloadSettings,
                     onWifiOnlyChange = viewModel::setDownloadWifiOnly,
                     onPauseOnLowBatteryChange =
-                        viewModel::setDownloadPauseOnLowBattery,
-                    onStorageCapChange = viewModel::setDownloadStorageCap
+                        viewModel::setDownloadPauseOnLowBattery
                 )
             }
 
@@ -833,7 +816,10 @@ private fun YourDataCard(
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "Backup & restore",
+            text = "Save your watchlist, lists, history and settings " +
+                "to a file on this device — no account, nothing is " +
+                "uploaded. Import the file on any phone to pick up " +
+                "where you left off.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -895,24 +881,16 @@ private fun SettingSwitchRow(
     }
 }
 
-/** Storage-cap choices offered in the Downloads card (GB = 10^9 bytes,
- * matching DownloadSettings' 10 GB default). */
-private val STORAGE_CAP_OPTIONS_GB = listOf(2L, 5L, 10L, 20L)
-private const val BYTES_PER_GB = 1_000_000_000L
-
 /**
  * Download settings (spec §7.3; UI added cycle 8): the rules the
- * engine has enforced since cycle 2 — Wi-Fi only, low-battery pause,
- * storage cap — finally with a screen to change them. Changes persist
- * at once and apply to the next download start.
+ * engine enforces — Wi-Fi only, low-battery pause. There is no storage
+ * cap: downloads fill the phone's free space, nothing more.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DownloadSettingsCard(
     settings: com.watchly.app.data.downloads.DownloadSettings,
     onWifiOnlyChange: (Boolean) -> Unit,
-    onPauseOnLowBatteryChange: (Boolean) -> Unit,
-    onStorageCapChange: (Long) -> Unit
+    onPauseOnLowBatteryChange: (Boolean) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -945,37 +923,6 @@ private fun DownloadSettingsCard(
             onCheckedChange = onPauseOnLowBatteryChange,
             switchDescription = "Pause on low battery"
         )
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = "Storage cap",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = "Watchly's downloads never grow past this much " +
-                "space on the phone.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(8.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            STORAGE_CAP_OPTIONS_GB.forEach { gb ->
-                FilterChip(
-                    selected = settings.storageCapBytes == gb * BYTES_PER_GB,
-                    onClick = { onStorageCapChange(gb * BYTES_PER_GB) },
-                    label = { Text("$gb GB") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = WatchlyGold,
-                        selectedLabelColor = Color(0xFF1A1405),
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    // 48dp minimum touch target, same as the
-                    // Browse/Playability chips (cycle-4 pass).
-                    modifier = Modifier.heightIn(min = 48.dp)
-                )
-            }
-        }
     }
 }
 

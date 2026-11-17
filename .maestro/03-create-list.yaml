@@ -30,7 +30,7 @@ appId: com.watchly.app
       - tapOn: "Wait"
 - tapOn: "My Library"
 - extendedWaitUntil:
-    visible: "Profiles"
+    visible: "Watchlist"
     timeout: 20000
 - scrollUntilVisible:
     element: "My Lists"

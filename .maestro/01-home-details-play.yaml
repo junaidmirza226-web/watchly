@@ -33,7 +33,7 @@ appId: com.watchly.app
 # Bottom-nav round trip proves the tab chrome is alive.
 - tapOn: "My Library"
 - extendedWaitUntil:
-    visible: "Profiles"
+    visible: "Watchlist"
     timeout: 20000
 - scrollUntilVisible:
     element: "Downloads"
