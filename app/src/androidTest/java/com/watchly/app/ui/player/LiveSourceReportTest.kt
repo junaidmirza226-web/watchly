@@ -3,27 +3,23 @@ package com.watchly.app.ui.player
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertNotNull
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** TEMPORARY diagnostic: live sniff report from CI network. Always fails to surface the report. */
+/** TEMPORARY diagnostic: a FAILING test here = the live source gave NO captured media. */
 @RunWith(AndroidJUnit4::class)
 class LiveSourceReportTest {
-    @Test
-    fun liveReport() {
+    private fun probe(url: String) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val urls = listOf(
-            "https://vidsrc.to/embed/movie/550",
-            "https://vidsrc.me/embed/movie/550",
-            "https://vidlink.pro/movie/550",
-            "https://autoembed.co/movie/tmdb/550",
-            "https://embed.su/embed/movie/550",
-            "https://multiembed.mov/?video_id=550&tmdb=1"
-        )
-        val lines = urls.map { u ->
-            val r = runBlocking { HeadlessStreamResolver.sniff(context, listOf(u)) }
-            "LIVE $u -> ${r?.url ?: "NONE"}"
-        }
-        throw AssertionError("LIVE_REPORT_BEGIN\n" + lines.joinToString("\n") + "\nLIVE_REPORT_END")
+        val r = runBlocking { HeadlessStreamResolver.sniff(context, listOf(url)) }
+        assertNotNull("NO_CAPTURE $url", r)
     }
+
+    @Test fun a_vidsrcTo() = probe("https://vidsrc.to/embed/movie/550")
+    @Test fun b_vidsrcMe() = probe("https://vidsrc.me/embed/movie/550")
+    @Test fun c_vidlink() = probe("https://vidlink.pro/movie/550")
+    @Test fun d_autoembed() = probe("https://autoembed.co/movie/tmdb/550")
+    @Test fun e_embedSu() = probe("https://embed.su/embed/movie/550")
+    @Test fun f_multiembed() = probe("https://multiembed.mov/?video_id=550&tmdb=1")
 }
