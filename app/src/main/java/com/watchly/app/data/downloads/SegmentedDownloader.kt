@@ -244,10 +244,10 @@ class SegmentedDownloader(
         onState: (DownloadSnapshot) -> Unit
     ): DownloadOutcome = withContext(Dispatchers.IO) {
         try {
-            val masterText = readAllBytes(url).toString(Charsets.UTF_8.name())
+            val masterText = readAllBytes(url).decodeToString()
             val variants = HlsSupport.parseMaster(masterText, url)
             val mediaUrl = variants.firstOrNull()?.uri ?: url
-            val mediaText = readAllBytes(mediaUrl).toString(Charsets.UTF_8.name())
+            val mediaText = readAllBytes(mediaUrl).decodeToString()
             val playlist = HlsSupport.parseMedia(mediaText, mediaUrl)
             if (playlist.segments.isEmpty()) {
                 return@withContext DownloadOutcome.Failed(
