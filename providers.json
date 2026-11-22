@@ -396,6 +396,23 @@
       "total_checks": 25,
       "successful_checks": 0,
       "uptime_percentage": 0.0
+    },
+    {
+      "name": "VidSrc PM",
+      "baseUrl": "https://vidsrc.pm",
+      "enabled": true,
+      "priority": 32,
+      "type": "EMBED",
+      "requiresReferer": true,
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+      "status": "up",
+      "response_time_ms": 1154.0,
+      "last_checked": "2026-11-22T10:57:04.735160+00:00",
+      "discovered_at": "2026-11-22T10:57:04.735160+00:00",
+      "uptime_percentage": 100.0,
+      "total_checks": 1,
+      "successful_checks": 1,
+      "consecutive_failures": 0
     }
   ]
 }
